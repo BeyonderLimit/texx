@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+
+# Test tooling
+.pytest_cache/
+
+# Local data (runtime DB lives in ~/.local/share/texx)
+*.db
+
+# Editors / OS / tooling locals
+.idea/
+.vscode/
+.DS_Store
+.claude/settings.local.json*
