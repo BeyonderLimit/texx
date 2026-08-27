@@ -25,7 +25,7 @@ class VoiceSession:
     """Push-to-talk voice mode: hold Space to record, release to send. Bridges the
     VoiceController to the existing route+execute pipeline and the TUI."""
 
-    RELEASE_GAP_S = 0.2  # gap in key-repeat chars => Space was released
+    MAX_HOLD_S = 15.0  # safety: force-stop a stuck hold
 
     def __init__(self, controller, app, router, executor, states):
         self.ctrl = controller
@@ -51,11 +51,55 @@ class VoiceSession:
         self.states.set(AssistantState.IDLE)
         return response
 
+    async def _read_keys(self, queue: "asyncio.Queue[str]", fd: int):
+        """Async stdin reader (yields to the event loop instead of blocking it).
+        Terminal is already in cbreak mode; we only read keys here."""
+        import sys
+
+        loop = asyncio.get_event_loop()
+        try:
+            while self._running:
+                ch = await loop.run_in_executor(None, sys.stdin.read, 1)
+                if not ch:
+                    break
+                await queue.put(ch)
+        except (OSError, ValueError):
+            pass
+
+    async def _stop_and_process(self):
+        self.app.console.print("[dim]■ transcribing…[/]")
+        text = await self.ctrl.finish_capture()
+        if text:
+            response = await self._on_utterance(text)
+            self.ctrl.speak(response)
+        else:
+            self.app.console.print("[dim](no speech detected)[/]")
+
+    @staticmethod
+    def _should_release(repeat_interval, now, last_space, hold_start, max_hold) -> bool:
+        """Infer Space release from the key-repeat gap (terminals have no key-up).
+
+        `repeat_interval` is None until the first auto-repeat arrives (after the
+        keyboard's repeat-delay). We must not release during that initial gap, else
+        recordings collapse to ~200ms. Once known, a gap >> the rate means released.
+        `max_hold` is a safety net for taps / stuck keys.
+        """
+        if repeat_interval is not None and (now - last_space) > repeat_interval * 4:
+            return True
+        if (now - hold_start) > max_hold:
+            return True
+        return False
+
     async def _ptt_loop(self):
-        """Hold-Space push-to-talk. Terminal is switched to cbreak so we see each
-        key immediately. Space key-down starts a capture; the stop is detected by
-        the gap in OS auto-repeat chars while the key is held."""
-        import select
+        """Hold-Space push-to-talk (true async, non-blocking the event loop).
+
+        Space key-down starts a capture. Terminals never report key-up, so release
+        is inferred from the gap between OS auto-repeat chars. The first repeat only
+        arrives after the keyboard repeat-delay, so we must NOT treat that initial
+        gap as a release — otherwise recordings get cut to ~200ms. We learn the
+        repeat interval from the first repeat, then fire release once the gap grows
+        well beyond it.
+        """
         import sys
         import termios
         import tty
@@ -64,46 +108,59 @@ class VoiceSession:
         fd = sys.stdin.fileno()
         old_term = termios.tcgetattr(fd)
         tty.setcbreak(fd)
+        queue: "asyncio.Queue[str]" = asyncio.Queue()
+        reader = asyncio.create_task(self._read_keys(queue, fd))
+        self.app.console.print(
+            "[bold]Voice mode — hold [cyan]Space[/] to talk, [cyan]Esc[/] to exit.[/]")
         recording = False
         last_space = 0.0
+        repeat_interval = None  # unknown until first auto-repeat arrives
+        hold_start = 0.0
         try:
-            self.app.console.print(
-                "[bold]Voice mode — hold [cyan]Space[/] to talk, [cyan]Esc[/] to exit.[/]")
             while self._running:
-                r, _, _ = select.select([sys.stdin], [], [], 0.05)
-                if r:
-                    ch = sys.stdin.read(1)
-                    if ch == " ":
-                        now = time.time()
-                        if not recording:
-                            if self.ctrl.begin_capture():
-                                recording = True
-                                last_space = now
-                                self.app.console.print("[red]●[/] recording… release Space to send")
-                        else:
-                            last_space = now  # auto-repeat: still held
-                    elif ch in ("\x1b",):  # Esc exits PTT
-                        self._running = False
-                        break
-                    # any other key is ignored in PTT mode
-                elif recording and (time.time() - last_space) > self.RELEASE_GAP_S:
-                    recording = False
-                    self.app.console.print("[dim]■ transcribing…[/]")
-                    text = await self.ctrl.finish_capture()
-                    if text:
-                        response = await self._on_utterance(text)
-                        self.ctrl.speak(response)
+                try:
+                    ch = await asyncio.wait_for(queue.get(), timeout=0.05)
+                except asyncio.TimeoutError:
+                    ch = None
+                now = time.time()
+                if ch == " ":
+                    if not recording:
+                        if self.ctrl.begin_capture():
+                            recording = True
+                            last_space = now
+                            repeat_interval = None
+                            hold_start = now
+                            self.app.console.print(
+                                "[red]●[/] recording… release Space to send")
                     else:
-                        self.app.console.print("[dim](no speech detected)[/]")
+                        delta = now - last_space
+                        # First repeat carries the keyboard repeat-delay; later ones
+                        # carry the (much shorter) repeat rate. Track the short rate.
+                        if repeat_interval is None:
+                            repeat_interval = min(delta, 0.2)
+                        else:
+                            repeat_interval = min(repeat_interval, max(delta, 0.01))
+                        last_space = now
+                elif ch == "\x1b":  # Esc exits PTT
+                    self._running = False
+                    break
+                if recording and self._should_release(
+                        repeat_interval, now, last_space, hold_start, self.MAX_HOLD_S):
+                    recording = False
+                    await self._stop_and_process()
         except Exception as e:  # noqa: BLE001
             self.app.console.print(f"[red]Voice mode error:[/] {e}")
         finally:
             if recording:
                 try:
-                    await self.ctrl.finish_capture()
+                    await self._stop_and_process()
                 except Exception:
                     pass
-            termios.tcsetattr(fd, termios.TCSADRAIN, old_term)
+            reader.cancel()
+            try:
+                termios.tcsetattr(fd, termios.TCSADRAIN, old_term)
+            except (OSError, ValueError):
+                pass
             self.active = False
             self.ctrl.enabled = False
             self.app.console.print("[dim]Voice mode off.[/]")

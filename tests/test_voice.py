@@ -277,3 +277,29 @@ class TestComponentStatus:
         assert "Mic: loaded" in out
         assert "Vosk: no model path configured" in out
         assert "Piper: loaded" in out
+
+
+class TestPTTReleaseLogic:
+    def test_no_release_during_initial_repeat_delay(self):
+        from main import VoiceSession
+        # repeat_interval is still None (first auto-repeat hasn't arrived yet);
+        # a 0.5s gap here must NOT be treated as a release.
+        assert VoiceSession._should_release(
+            None, now=10.5, last_space=10.0, hold_start=10.0, max_hold=15.0) is False
+
+    def test_release_after_repeat_rate_gap(self):
+        from main import VoiceSession
+        # rate settled at 30ms; a 200ms gap is >> 4*30ms => released.
+        assert VoiceSession._should_release(
+            0.03, now=10.2, last_space=10.0, hold_start=9.0, max_hold=15.0) is True
+
+    def test_no_release_within_repeat_rate(self):
+        from main import VoiceSession
+        assert VoiceSession._should_release(
+            0.03, now=10.05, last_space=10.0, hold_start=9.0, max_hold=15.0) is False
+
+    def test_max_hold_safety(self):
+        from main import VoiceSession
+        # stuck key, never gets repeats: max_hold forces release.
+        assert VoiceSession._should_release(
+            None, now=30.0, last_space=10.0, hold_start=9.0, max_hold=15.0) is True
