@@ -160,6 +160,7 @@ always-listening. It needs three local assets (all optional — Texx runs withou
 | `/voice` | Voice status (which pieces are present) |
 | `/voice on` | Enter voice mode: **hold `Space` to talk, release to send, `Esc` to exit** |
 | `/voice off` | Leave voice mode (also `Esc` from within it) |
+| `/voice set /path` | Point Texx at a model: a **directory** sets Vosk STT, a **`.onnx`** file sets Piper TTS (auto-routes, hot-reloads) |
 | `/vosk set /path/to/model` | Point Texx at a downloaded Vosk model (hot-reloads) |
 | `/piper set /path/to/voice.onnx` | Point Texx at a Piper voice (hot-reloads) |
 

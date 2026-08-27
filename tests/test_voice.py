@@ -190,21 +190,22 @@ class TestStatusVoiceLine:
         from core.executor import _voice_status_line
         fake = SimpleNamespace(
             ctrl=SimpleNamespace(is_available=lambda: False,
-                                 unavailable_reason=lambda: "vosk not installed"),
+                                 component_status=lambda: "Vosk: no model path configured"),
             is_active=False)
-        assert _voice_status_line(SimpleNamespace(voice=fake)) == "off (vosk not installed)"
+        assert _voice_status_line(SimpleNamespace(voice=fake)) == \
+            "off (Vosk: no model path configured)"
 
     def test_voice_line_active(self):
         from core.executor import _voice_status_line
         fake = SimpleNamespace(
-            ctrl=SimpleNamespace(is_available=lambda: True, unavailable_reason=lambda: "available"),
+            ctrl=SimpleNamespace(is_available=lambda: True, component_status=lambda: "x"),
             is_active=True)
         assert _voice_status_line(SimpleNamespace(voice=fake)) == "ON (hold Space to talk)"
 
     def test_voice_line_ready_off(self):
         from core.executor import _voice_status_line
         fake = SimpleNamespace(
-            ctrl=SimpleNamespace(is_available=lambda: True, unavailable_reason=lambda: "available"),
+            ctrl=SimpleNamespace(is_available=lambda: True, component_status=lambda: "x"),
             is_active=False)
         assert _voice_status_line(SimpleNamespace(voice=fake)) == "ready (off)"
 
@@ -217,3 +218,62 @@ class TestStatusVoiceLine:
             SimpleNamespace(context=lambda: {"time": "10:00", "date": "Mon"}),
             tasks=None, voice="ON (hold Space to talk)")
         assert "Voice:     ON (hold Space to talk)" in out
+
+
+class TestVoiceSetRoute:
+    def test_directory_routes_to_vosk(self, tmp_path):
+        from core.slash import _voice_set_route
+        d = tmp_path / "vosk-model"
+        d.mkdir()
+        captured = {}
+        voice = SimpleNamespace(set_vosk=lambda p: captured.setdefault("p", p) or "vok",
+                                set_piper=lambda p: "should not be called")
+        _voice_set_route(voice, str(d))
+        assert captured["p"] == str(d)
+
+    def test_onnx_routes_to_piper(self, tmp_path):
+        from core.slash import _voice_set_route
+        f = tmp_path / "voice.onnx"
+        f.write_text("x")
+        captured = {}
+        voice = SimpleNamespace(set_vosk=lambda p: "should not be called",
+                                set_piper=lambda p: captured.setdefault("p", p) or "pok")
+        _voice_set_route(voice, str(f))
+        assert captured["p"] == str(f)
+
+    def test_zip_gives_extract_guidance(self, tmp_path):
+        from core.slash import _voice_set_route
+        f = tmp_path / "vosk.zip"
+        f.write_text("x")
+        voice = SimpleNamespace(set_vosk=lambda p: "x", set_piper=lambda p: "x")
+        out = _voice_set_route(voice, str(f))
+        assert "Extract" in out
+
+    def test_ambiguous_gives_guidance(self):
+        from core.slash import _voice_set_route
+        voice = SimpleNamespace(set_vosk=lambda p: "x", set_piper=lambda p: "x")
+        out = _voice_set_route(voice, "/some/random/path")
+        assert "Vosk" in out
+
+
+class TestComponentStatus:
+    def test_mixed_components(self):
+        from voice.ptt import VoiceController
+
+        class C:
+            def __init__(self, avail, reason=""):
+                self._a = avail
+                self._r = reason
+            def is_available(self):
+                return self._a
+            def unavailable_reason(self):
+                return self._r
+
+        ctrl = VoiceController()
+        ctrl.recorder = C(True)
+        ctrl.stt = C(False, "no model path configured")
+        ctrl.tts = C(True)
+        out = ctrl.component_status()
+        assert "Mic: loaded" in out
+        assert "Vosk: no model path configured" in out
+        assert "Piper: loaded" in out

@@ -128,11 +128,13 @@ class VoiceSession:
         return "Voice mode off."
 
     def status(self) -> str:
+        comps = self.ctrl.component_status()
+        if self.active:
+            return f"Voice mode ACTIVE — {comps}. Hold Space to talk, Esc to exit."
         if not self.ctrl.is_available():
-            return (f"Voice is not active ({self.ctrl.unavailable_reason()}). "
-                    "Install vosk + a model and sounddevice to enable it.")
-        return "Voice ready — use /voice on (hold Space to talk)." if not self.active \
-            else "Voice mode active — hold Space to talk, Esc to exit."
+            return (f"Voice not startable — {comps}. "
+                    "Need Mic + Vosk loaded; set them with /voice set <path>.")
+        return f"Voice ready — {comps}. Use /voice on (hold Space to talk)."
 
     def set_vosk(self, path: str) -> str:
         self.executor.ctx.settings.set("vosk_model_path", path)

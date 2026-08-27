@@ -36,6 +36,18 @@ class VoiceController:
             return getattr(self.stt, "unavailable_reason", lambda: "no STT")()
         return "available"
 
+    def component_status(self) -> str:
+        def _part(label, comp):
+            if comp.is_available():
+                return f"{label}: loaded"
+            reason = getattr(comp, "unavailable_reason", lambda: "unavailable")()
+            return f"{label}: {reason}"
+        return " · ".join([
+            _part("Mic", self.recorder),
+            _part("Vosk", self.stt),
+            _part("Piper", self.tts),
+        ])
+
     async def capture_utterance(self) -> str | None:
         """Record and transcribe one utterance. Returns text, or None on timeout/no speech."""
         if not self.is_available():

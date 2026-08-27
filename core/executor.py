@@ -314,10 +314,10 @@ def _voice_status_line(ctx) -> str:
     voice = getattr(ctx, "voice", None)
     if voice is None:
         return "n/a"
-    if not voice.ctrl.is_available():
-        return f"off ({voice.ctrl.unavailable_reason()})"
     if getattr(voice, "is_active", False):
         return "ON (hold Space to talk)"
+    if not voice.ctrl.is_available():
+        return f"off ({voice.ctrl.component_status()})"
     return "ready (off)"
 
 

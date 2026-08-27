@@ -318,7 +318,7 @@ Status: COMPLETE (integration layer; Vosk/Piper/sounddevice optional, lazy-loade
   cbreak, Space key-down starts capture, release is detected by the gap in OS
   key-repeat chars; `Esc` exits. Main loop awaits the PTT task instead of the text
   prompt while voice is active (state machine wired: PROCESSING etc.)
-- [x] Slash: `/voice [on|off]`, `/vosk set PATH`, `/piper set PATH` (hot-reload model paths)
+- [x] Slash: `/voice [on|off|set PATH]`, `/vosk set PATH`, `/piper set PATH` (hot-reload model paths; `/voice set` auto-routes dir→Vosk, .onnx→Piper)
 - [x] Installed optional deps: `vosk`, `sounddevice`, `piper-tts` (+ onnxruntime)
 - [x] 15 tests (`tests/test_voice.py`) with fakes — VAD, availability, capture, converse
   (handler+speak), optional-backend degradation, /voice /vosk /piper slash commands

@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from pathlib import Path
 
 
 @dataclass
@@ -27,7 +28,7 @@ SLASH_COMMANDS: dict[str, SlashCommand] = {
     "/read": SlashCommand("/read", "N", "Read article from result N (after search)"),
     "/ical": SlashCommand("/ical", "PATH", "Import events from an .ics calendar file"),
     "/llm": SlashCommand("/llm", "[set PATH | off]", "Show model status, set GGUF path, or disable"),
-    "/voice": SlashCommand("/voice", "[on | off]", "Voice mode status, start, or stop"),
+    "/voice": SlashCommand("/voice", "[on | off | set PATH]", "Voice mode status, start, stop, or set a model"),
     "/vosk": SlashCommand("/vosk", "set PATH", "Point Texx at a Vosk model directory"),
     "/piper": SlashCommand("/piper", "set PATH", "Point Texx at a Piper voice .onnx"),
     "/tasks": SlashCommand("/tasks", "", "List open tasks"),
@@ -217,6 +218,9 @@ async def handle(text: str, ctx) -> str:
         if voice is None or not hasattr(voice, "status"):
             return "Voice subsystem is not initialized."
         arg = arg.lower()
+        if arg.startswith("set "):
+            path = arg[4:].strip()
+            return _voice_set_route(voice, path)
         if arg in ("off", "stop"):
             return voice.stop()
         if arg in ("on", "start"):
@@ -257,3 +261,18 @@ async def handle(text: str, ctx) -> str:
     if name == "/exit":
         return "__EXIT__"
     return "Not implemented."
+
+
+def _voice_set_route(voice, path: str) -> str:
+    p = Path(path).expanduser()
+    if p.is_dir():
+        return voice.set_vosk(str(p))
+    if path.endswith(".onnx"):
+        return voice.set_piper(path)
+    if path.endswith(".zip"):
+        return ("That looks like a Vosk model archive. Extract it first "
+                "(e.g. unzip it), then run /voice set <extracted-directory>.")
+    return ("Couldn't tell what to set. Use a model directory for Vosk "
+            "(/voice set /path/to/vosk-model) or a .onnx file for Piper "
+            "(/voice set /path/to/voice.onnx).")
+
