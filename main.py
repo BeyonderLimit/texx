@@ -38,7 +38,7 @@ async def main() -> int:
                                 memory=executor.ctx.memory, tasks=executor.ctx.tasks,
                                 cache=executor.ctx.cache, web=executor.ctx.web,
                                 wiki=executor.ctx.wiki, files=executor.ctx.files,
-                                weather=executor.ctx.weather)
+                                weather=executor.ctx.weather, llm=executor.ctx.llm)
     executor.ctx.memory.purge_expired()
     executor.ctx.tasks.purge_expired()
 

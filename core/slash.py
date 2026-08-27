@@ -26,6 +26,7 @@ SLASH_COMMANDS: dict[str, SlashCommand] = {
     "/find": SlashCommand("/find", "NAME", "Search local files"),
     "/read": SlashCommand("/read", "N", "Read article from result N (after search)"),
     "/ical": SlashCommand("/ical", "PATH", "Import events from an .ics calendar file"),
+    "/llm": SlashCommand("/llm", "[set PATH | off]", "Show model status, set GGUF path, or disable"),
     "/tasks": SlashCommand("/tasks", "", "List open tasks"),
     "/mode": SlashCommand("/mode", "[normal|silent|dnd]", "Get or set notification mode"),
     "/brief": SlashCommand("/brief", "", "Show a summary of your day"),
@@ -182,6 +183,32 @@ async def handle(text: str, ctx) -> str:
         if not arg:
             return "Usage: /ical /path/to/calendar.ics"
         return await calendar_import(_Cmd(intent="calendar.import", slots={"path": arg}), ctx)
+    if name == "/llm":
+        from llm.manager import LLMManager
+        if arg.lower() in ("off", "disable", "none"):
+            ctx.settings.set("llm_model_path", "")
+            if getattr(ctx, "llm", None) is not None:
+                ctx.llm.set_model(None)
+            return "Local LLM disabled (no model configured)."
+        if arg.lower().startswith("set "):
+            arg = arg[4:].strip()
+        if arg:
+            ctx.settings.set("llm_model_path", arg)
+            if getattr(ctx, "llm", None) is not None:
+                ctx.llm.set_model(arg)
+            else:
+                ctx.llm = LLMManager(arg)
+            if ctx.llm.is_available():
+                return f"Local LLM loaded from {arg}."
+            return (f"Set model path to {arg}, but it can't be loaded yet: "
+                    f"{ctx.llm.unavailable_reason()}. Conversation will stay disabled "
+                    "until a valid GGUF is available.")
+        llm = getattr(ctx, "llm", None)
+        if llm is None or not llm.is_available():
+            reason = llm.unavailable_reason() if llm else "not initialized"
+            return (f"Local LLM is not active ({reason}).\n"
+                    "Enable it with: /llm set /path/to/model.gguf")
+        return "Local LLM is active and ready for conversation."
     if name == "/name":
         if arg:
             ctx.settings.set("assistant_name", arg)

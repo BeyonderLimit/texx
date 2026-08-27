@@ -100,10 +100,39 @@ async def close_app(command, ctx):
 
 @register("conversation.chat")
 async def chat(command, ctx):
-    return (
-        "I don't have a conversational brain yet — the local LLM arrives in Phase 5. "
-        "Type `help` to see everything I can do right now."
-    )
+    user_text = command.slots.get("text", "")
+    llm = ctx.llm
+    if llm is None or not llm.is_available():
+        return (
+            "I don't have a conversational brain configured yet. "
+            "Type `help` to see everything I can do with commands, or load a local "
+            "model with `/llm set /path/to/model.gguf`."
+        )
+    from llm.engine import ChatMessage
+    reply = llm.respond(user_text, history=ctx._chat_history)
+    if not reply:
+        return "The local model didn't return a response (it may have errored)."
+    ctx._chat_history.append(ChatMessage("user", user_text))
+    ctx._chat_history.append(ChatMessage("assistant", reply))
+    ctx._chat_history = ctx._chat_history[-12:]
+    _maybe_store_memories(ctx, user_text, reply)
+    return reply
+
+
+def _maybe_store_memories(ctx, user_text: str, reply: str) -> None:
+    if ctx.llm is None or not ctx.llm.is_available():
+        return
+    candidates = ctx.llm.extract_memories(f"User: {user_text}\nTexx: {reply}")
+    for cand in candidates[:5]:
+        try:
+            ctx.memory.add(
+                cand["content"],
+                category=cand.get("category", "FACT"),
+                importance=cand.get("importance", 5),
+                source="conversation",
+            )
+        except Exception:
+            continue
 
 
 def normalize_display(name: str) -> str:
@@ -112,7 +141,7 @@ def normalize_display(name: str) -> str:
 
 class ExecutorContext:
     def __init__(self, settings: Settings, system: SystemService,
-                 web=None, wiki=None, files=None, weather=None):
+                 web=None, wiki=None, files=None, weather=None, llm=None):
         self.settings = settings
         self.system = system
         self.time = TimeService(settings)
@@ -125,8 +154,10 @@ class ExecutorContext:
         self.files = files if files is not None else FileSearchService()
         from services.weather import WeatherProvider
         self.weather = weather if weather is not None else WeatherProvider()
+        self.llm = llm
         self.last_file_results: list = []
         self.last_web_results: list = []
+        self._chat_history: list = []
 
 
 def _format_due(due, rrule) -> str:
@@ -718,13 +749,16 @@ async def assistant_brief(command, ctx):
 class Executor:
     def __init__(self, bus: EventBus, states: StateManager, settings: Settings,
                  system: SystemService | None = None, timers=None, web=None, wiki=None,
-                 files=None, weather=None):
+                 files=None, weather=None, llm=None):
         self.bus = bus
         self.states = states
+        if llm is None:
+            from llm.manager import LLMManager
+            llm = LLMManager(settings.get("llm_model_path"))
         self.ctx = ExecutorContext(
             settings,
             system if system is not None else SystemService(settings),
-            web=web, wiki=wiki, files=files, weather=weather,
+            web=web, wiki=wiki, files=files, weather=weather, llm=llm,
         )
         if timers is None:
             from core.timers import TimerManager

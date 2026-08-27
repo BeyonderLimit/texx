@@ -11,9 +11,9 @@ Core principle: **LLM understands and talks. Deterministic code decides and acts
 
 | Item | State |
 |---|---|
-| Current phase | **Phase 4 — Knowledge services** ✅ COMPLETE |
-| Latest build | Build 16 |
-| Tests | 139 passed |
+| Current phase | **Phase 5 — Local LLM** (integration complete; model optional) |
+| Latest build | Build 17 |
+| Tests | 146 passed |
 | LLM | Not installed (by design until Phase 5) |
 | Voice | Not started (Phase 6) |
 
@@ -36,6 +36,7 @@ Core principle: **LLM understands and talks. Deterministic code decides and acts
 | `services/systeminfo.py` | Battery/volume/brightness/processes via sysfs/pactl//proc — zero dependencies |
 | `services/notifier.py` | Notifier protocol: console panels + bell alerter (Piper plugs in at Phase 6) |
 | `services/settings.py`, `storage/` | SQLite persistence, idempotent migrations, FTS5 triggers |
+| `llm/` | Optional local-model layer: `engine` (protocol), `local` (llama-cpp-python, lazy), `manager` (respond + memory extraction) |
 | `ui/app.py` + `main.py` | Rich TUI, async prompt (non-blocking), live clock banner |
 
 ---
@@ -277,6 +278,29 @@ Status: COMPLETE — Phase 4 fully delivered
 
 ---
 
+**Build 17 — Local LLM integration (Phase 5)**
+
+Status: COMPLETE (integration layer; loads a real GGUF model when the user provides one)
+
+- [x] `llm/engine.py` — `LLMEngine` protocol + `ChatMessage` / `CompletionResult` dataclasses; `UnavailableEngine` no-op
+- [x] `llm/local.py` — `LocalLLM` wraps `llama-cpp-python` **lazily**: if the package
+  is missing or no model path is set, `is_available()` is False and it never raises.
+  `chat()` and `complete(json_mode=True)` with best-effort JSON extraction
+- [x] `llm/manager.py` — `LLMManager`: `respond()` (persona system prompt + short
+  history), `extract_memories()` (structured JSON → memory candidates), `is_available()`
+- [x] `conversation.chat` now routes through `ctx.llm`; falls back to a clear message
+  when no model is loaded; automatically extracts + stores memory candidates from each turn
+- [x] `ExecutorContext.llm` wired in `core/executor.py`; `Executor` builds an `LLMManager`
+  from the `llm_model_path` setting. `main.py` exposes it via `slash_ctx`
+- [x] `/llm` slash command: status, `set <path>`, `off` — reconfigures the live model
+- [x] 7 tests (`tests/test_llm.py`) with an offline `FakeLLM` (no model downloaded):
+  manager respond/extract, chat fallback, chat + memory storage, `/llm` status + set
+
+Design note: Texx still works 100% without an LLM. The model is a *bounded* service
+for chat, explanation, and memory extraction — deterministic commands never depend on it.
+
+---
+
 ## Roadmap
 
 | Phase | Scope | Status |
@@ -287,7 +311,7 @@ Status: COMPLETE — Phase 4 fully delivered
 | 3 | Memory engine (explicit memory, filtered candidates, FTS5 retrieval, importance scoring, expiration) | ✅ Complete |
 | 3.5 | Extensions delivered alongside: tasks with priority + TTL, notes | ✅ Complete |
 | 4 | Knowledge: ✅ web search + Wikipedia + caching + local file search + weather + calendar import + article extraction | ✅ Done |
-| 5 | Local LLM (`llama-cpp-python`, structured JSON output, schema validation, automatic memory extraction) | ⬜ |
+| 5 | Local LLM integration: ✅ optional `llama-cpp-python` layer, conversation.chat, auto memory extraction, /llm command | ✅ Done |
 | 6 | Voice (Piper TTS, Vosk STT, VAD, PTT, dictation) | ⬜ |
 
 ---

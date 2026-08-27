@@ -25,7 +25,7 @@ Type `help` at any time to see this list.
 | Weather — current conditions + today/tomorrow forecast, location setting | ✅ Live |
 | External calendar import (local `.ics` files) | ✅ Live |
 | Article extraction (`read result N` / `/read N`) | ✅ Live |
-| LLM conversation, writing, explanations | ⬜ Phase 5 |
+| Local LLM conversation + auto memory extraction | ✅ Live (optional — needs a GGUF model) |
 | Voice — push-to-talk input, spoken replies (incl. dictation) | ⬜ Phase 6 |
 
 ## Commands you can type
@@ -129,6 +129,22 @@ Notes:
 
 Works offline gracefully: if there's no network you get a clear message, and cached
 results still answer. `/web QUERY`, `/find NAME`, and `/read N` are slash shortcuts.
+
+### Conversation (local LLM)
+
+Texx can hold a normal chat using a small local GGUF model via `llama-cpp-python`.
+The LLM is optional — every command above works without it, and the model only
+loads when you configure one.
+
+| Say | Does |
+|---|---|
+| `tell me a joke` / `explain photosynthesis simply` | Free-form chat answered by the local model |
+| `/llm` | Show whether a model is loaded |
+| `/llm set /path/to/model.gguf` | Point Texx at a local model (loaded on set) |
+| `/llm off` | Disable the LLM |
+
+When a conversation is active, Texx silently extracts durable facts (preferences,
+people, projects) and stores them to memory — visible with `memories`.
 
 ### Weather
 
