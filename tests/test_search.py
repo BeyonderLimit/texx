@@ -159,8 +159,8 @@ def test_file_find_and_open_result(tmp_path, monkeypatch):
 
     import subprocess
     orig = subprocess.Popen
-    def fake_popen(argv):
-        opened["argv"] = argv
+    def fake_popen(*args, **kwargs):
+        opened["argv"] = args[0]
         class R:
             pass
         return R()
@@ -186,7 +186,12 @@ def test_open_result_after_web_search_opens_url(tmp_path):
     opened = {}
     import subprocess
     orig = subprocess.Popen
-    subprocess.Popen = lambda argv: opened.setdefault("argv", argv)
+    def fake_popen(*args, **kwargs):
+        opened.setdefault("argv", args[0])
+        class R:
+            pass
+        return R()
+    subprocess.Popen = fake_popen
     try:
         asyncio.run(ask(ctx, router, executor, "search for test thing"))
         command, response = asyncio.run(ask(ctx, router, executor, "open result 1"))

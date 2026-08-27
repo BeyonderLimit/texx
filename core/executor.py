@@ -574,19 +574,19 @@ async def file_find(command, ctx):
 @register("file.open_result")
 async def file_open_result(command, ctx):
     n = command.slots["n"]
-    import subprocess
+    from services.system import launch_detached
     if ctx.last_file_results:
         if not 1 <= n <= len(ctx.last_file_results):
             return f"Result {n} doesn't exist ({len(ctx.last_file_results)} matches). Try 'find' again."
         path = ctx.last_file_results[n - 1]
-        subprocess.Popen(["xdg-open", str(path)])
+        launch_detached(["xdg-open", str(path)])
         return f"Opening {path.name}."
     urls = getattr(ctx, "last_web_results", [])
     if urls:
         if not 1 <= n <= len(urls):
             return f"Result {n} doesn't exist ({len(urls)} matches). Try 'search' again."
         url = urls[n - 1]
-        subprocess.Popen(["xdg-open", url])
+        launch_detached(["xdg-open", url])
         return f"Opening {url} in your browser."
     return "Nothing to open yet — use 'find <name>' or 'search for <query>' first."
 

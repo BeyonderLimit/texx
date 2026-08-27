@@ -1,6 +1,19 @@
 import json
 import subprocess
 
+
+def launch_detached(argv: list[str]) -> None:
+    """Launch a GUI/external app so it never shares the TUI's terminal or
+    process group — output is discarded, and it survives Ctrl-C / terminal close."""
+    subprocess.Popen(
+        argv,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        stdin=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+
+
 APP_ALIASES = {
     "firefox": ["fire fox", "mozilla", "firefox browser"],
     "files": ["file manager", "my files"],
@@ -94,7 +107,7 @@ class SystemService:
         command = self.open_map().get(normalize(name))
         if not command:
             raise UnknownApplication(name)
-        subprocess.Popen(command)
+        launch_detached(command)
 
     def close_app(self, name: str):
         process = self.close_map().get(normalize(name))
