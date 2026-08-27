@@ -54,6 +54,7 @@ If adding a new matcher, place it where it wins or loses correctly relative to s
 - **App open/close requires allowlists** — never `shell=True`, never raw user text into `subprocess`; allowlists merge built-in defaults with `/allow` and `/disallow` entries
 - **`conversation.chat` is a stub** when no local model is configured — with a GGUF model set via `/llm set`, it answers via `ctx.llm` (LLMManager); `llama-cpp-python` is NOT a dependency and must never be imported at module top level
 - **LLM layer is optional and degrades gracefully** — `llm/local.py` lazy-imports `llama_cpp` and returns an `UnavailableEngine` if missing; never write code that assumes a model is loaded
+- **Voice layer is optional and lazy-loaded** — `voice/stt.py` (Vosk), `voice/tts.py` (Piper), `voice/recorder.py` (sounddevice) all import their native libs lazily; `VoiceController.is_available()` gates use. Never import `vosk`/`piper`/`sounddevice` at module top level
 - **Network-facing tests stay mocked/offline** — providers (`web.search`, Wikipedia, weather) and the LLM use injected fakes in tests (e.g. `FakeLLM`); the real model is never downloaded in CI
 
 ## Environment

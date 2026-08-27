@@ -26,7 +26,7 @@ Type `help` at any time to see this list.
 | External calendar import (local `.ics` files) | ✅ Live |
 | Article extraction (`read result N` / `/read N`) | ✅ Live |
 | Local LLM conversation + auto memory extraction | ✅ Live (optional — needs a GGUF model) |
-| Voice — push-to-talk input, spoken replies (incl. dictation) | ⬜ Phase 6 |
+| Voice — push-to-talk input, spoken replies | ✅ Live (optional — needs Vosk model + Piper voice + mic) |
 
 ## Commands you can type
 
@@ -145,6 +145,27 @@ loads when you configure one.
 
 When a conversation is active, Texx silently extracts durable facts (preferences,
 people, projects) and stores them to memory — visible with `memories`.
+
+### Voice (push-to-talk)
+
+Texx can listen and reply out loud. Voice is **opt-in and push-to-talk**, never
+always-listening. It needs three local assets (all optional — Texx runs without them):
+
+- `vosk` + a Vosk model directory (speech-to-text)
+- `sounddevice` + a microphone (capture)
+- `piper-tts` + a Piper `.onnx` voice (speech synthesis)
+
+| Say | Does |
+|---|---|
+| `/voice` | Voice status (which pieces are present) |
+| `/voice on` | Start the listening loop — speak after it's ready; `/voice off` stops it |
+| `/vosk set /path/to/model` | Point Texx at a downloaded Vosk model (hot-reloads) |
+| `/piper set /path/to/voice.onnx` | Point Texx at a Piper voice (hot-reloads) |
+
+The pipeline per utterance is: **record → VAD endpoint → Vosk → route/execute →
+Piper speaks the reply**. If only some pieces exist (e.g. STT but no TTS), the
+reply still prints — it just isn't spoken. VAD is a dependency-free energy
+detector, so no extra model is needed for endpointing.
 
 ### Weather
 

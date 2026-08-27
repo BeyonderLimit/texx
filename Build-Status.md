@@ -11,11 +11,11 @@ Core principle: **LLM understands and talks. Deterministic code decides and acts
 
 | Item | State |
 |---|---|
-| Current phase | **Phase 5 — Local LLM** (integration complete; model optional) |
-| Latest build | Build 17 |
-| Tests | 146 passed |
+| Current phase | **Phase 6 — Voice** (integration complete; backends optional) |
+| Latest build | Build 18 |
+| Tests | 159 passed |
 | LLM | Not installed (by design until Phase 5) |
-| Voice | Not started (Phase 6) |
+| Voice | Optional layer complete (needs Vosk model + Piper voice + mic at runtime) | ✅ Done |
 
 ---
 
@@ -301,6 +301,30 @@ for chat, explanation, and memory extraction — deterministic commands never de
 
 ---
 
+**Build 18 — Voice subsystem (Phase 6)**
+
+Status: COMPLETE (integration layer; Vosk/Piper/sounddevice optional, lazy-loaded)
+
+- [x] `voice/tts.py` — `TextToSpeech` protocol; `PiperTTS` (lazy `piper-tts`, writes
+  WAV then plays via `paplay`/`aplay`/`play` detached); `OffTTS` no-op
+- [x] `voice/stt.py` — `SpeechToText` protocol; `VoskSTT` (lazy `vosk`, 16k mono PCM); `OffSTT` no-op
+- [x] `voice/vad.py` — `VoiceActivityDetector` protocol; `EnergyVAD` dependency-free RMS endpointing
+- [x] `voice/recorder.py` — `Recorder` protocol; `SounddeviceRecorder` (lazy `sounddevice`,
+  16 kHz/16-bit, VAD endpointing) + `OffRecorder`
+- [x] `voice/ptt.py` — `VoiceController`: capture→STT→handler→TTS; `is_available()` requires
+  recorder+STT, TTS is a bonus; capture runs in an executor thread
+- [x] `main.py` — `VoiceSession` bridges controller to route+execute+TUI; `/voice on|off`
+  starts/stops a concurrent listening loop (state machine wired: PROCESSING etc.)
+- [x] Slash: `/voice [on|off]`, `/vosk set PATH`, `/piper set PATH` (hot-reload model paths)
+- [x] Installed optional deps: `vosk`, `sounddevice`, `piper-tts` (+ onnxruntime)
+- [x] 15 tests (`tests/test_voice.py`) with fakes — VAD, availability, capture, converse
+  (handler+speak), optional-backend degradation, /voice /vosk /piper slash commands
+
+Design note: voice is push-to-talk, never always-listening. All three native libs are
+lazy-imported so Texx runs identically without them; model files are user-supplied.
+
+---
+
 ## Roadmap
 
 | Phase | Scope | Status |
@@ -312,7 +336,7 @@ for chat, explanation, and memory extraction — deterministic commands never de
 | 3.5 | Extensions delivered alongside: tasks with priority + TTL, notes | ✅ Complete |
 | 4 | Knowledge: ✅ web search + Wikipedia + caching + local file search + weather + calendar import + article extraction | ✅ Done |
 | 5 | Local LLM integration: ✅ optional `llama-cpp-python` layer, conversation.chat, auto memory extraction, /llm command | ✅ Done |
-| 6 | Voice (Piper TTS, Vosk STT, VAD, PTT, dictation) | ⬜ |
+| 6 | Voice: ✅ Vosk STT + Piper TTS + EnergyVAD + sounddevice recorder + PTT loop, /voice /vosk /piper | ✅ Done |
 
 ---
 

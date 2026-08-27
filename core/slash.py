@@ -27,6 +27,9 @@ SLASH_COMMANDS: dict[str, SlashCommand] = {
     "/read": SlashCommand("/read", "N", "Read article from result N (after search)"),
     "/ical": SlashCommand("/ical", "PATH", "Import events from an .ics calendar file"),
     "/llm": SlashCommand("/llm", "[set PATH | off]", "Show model status, set GGUF path, or disable"),
+    "/voice": SlashCommand("/voice", "[on | off]", "Voice mode status, start, or stop"),
+    "/vosk": SlashCommand("/vosk", "set PATH", "Point Texx at a Vosk model directory"),
+    "/piper": SlashCommand("/piper", "set PATH", "Point Texx at a Piper voice .onnx"),
     "/tasks": SlashCommand("/tasks", "", "List open tasks"),
     "/mode": SlashCommand("/mode", "[normal|silent|dnd]", "Get or set notification mode"),
     "/brief": SlashCommand("/brief", "", "Show a summary of your day"),
@@ -209,6 +212,37 @@ async def handle(text: str, ctx) -> str:
             return (f"Local LLM is not active ({reason}).\n"
                     "Enable it with: /llm set /path/to/model.gguf")
         return "Local LLM is active and ready for conversation."
+    if name == "/voice":
+        voice = getattr(ctx, "voice", None)
+        if voice is None or not hasattr(voice, "status"):
+            return "Voice subsystem is not initialized."
+        arg = arg.lower()
+        if arg in ("off", "stop"):
+            return voice.stop()
+        if arg in ("on", "start"):
+            if not voice.ctrl.is_available():
+                return (f"Can't start voice ({voice.ctrl.unavailable_reason()}). "
+                        "Install vosk + a model and sounddevice, then re-run Texx.")
+            return voice.start()
+        return voice.status()
+    if name == "/vosk":
+        voice = getattr(ctx, "voice", None)
+        if voice is None or not hasattr(voice, "set_vosk"):
+            return "Voice subsystem is not initialized."
+        if not arg:
+            return "Usage: /vosk set /path/to/vosk-model"
+        if arg.lower().startswith("set "):
+            arg = arg[4:].strip()
+        return voice.set_vosk(arg)
+    if name == "/piper":
+        voice = getattr(ctx, "voice", None)
+        if voice is None or not hasattr(voice, "set_piper"):
+            return "Voice subsystem is not initialized."
+        if not arg:
+            return "Usage: /piper set /path/to/voice.onnx"
+        if arg.lower().startswith("set "):
+            arg = arg[4:].strip()
+        return voice.set_piper(arg)
     if name == "/name":
         if arg:
             ctx.settings.set("assistant_name", arg)

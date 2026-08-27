@@ -3,3 +3,9 @@ rapidfuzz>=3.0
 # Optional: only needed for local LLM conversation (Phase 5). Texx runs fully
 # without it; install to enable /llm with a GGUF model.
 llama-cpp-python>=0.3.0
+# Optional: voice (Phase 6). Texx runs fully without these. For voice you also
+# need model files (a Vosk model dir and a Piper .onnx voice) supplied by the user.
+vosk>=0.3.45
+sounddevice>=0.4.0
+piper-tts>=1.5.0
+
