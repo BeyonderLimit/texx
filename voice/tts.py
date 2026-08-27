@@ -76,8 +76,15 @@ class PiperTTS:
             import wave
 
             with wave.open(str(wav_path), "wb") as wav_file:
-                self._voice.synthesize(text, wav_file)
+                # synthesize_wav sets the WAV header params from the model config
+                # and writes the audio; the bare `synthesize` API only yields
+                # chunks and would leave the header unset (wave close -> error).
+                self._voice.synthesize_wav(text, wav_file)
             _play_wav(wav_path)
+        except Exception as e:  # noqa: BLE001
+            # Playback must never crash the caller (e.g. voice mode).
+            import sys
+            print(f"[piper] TTS failed: {e}", file=sys.stderr)
         finally:
             try:
                 wav_path.unlink()

@@ -76,8 +76,13 @@ class VoiceController:
         return await loop.run_in_executor(None, self.stt.transcribe, audio)
 
     def speak(self, text: str) -> None:
-        if self.tts.is_available():
+        if not self.tts.is_available():
+            return
+        try:
             self.tts.speak(text)
+        except Exception as e:  # noqa: BLE001
+            import sys
+            print(f"[voice] TTS error (ignored): {e}", file=sys.stderr)
 
     async def converse(self, handler: UtteranceHandler, speak: bool = True) -> str | None:
         """Capture one utterance, run it through `handler` (route+execute), then

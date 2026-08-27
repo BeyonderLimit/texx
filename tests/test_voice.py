@@ -303,3 +303,57 @@ class TestPTTReleaseLogic:
         # stuck key, never gets repeats: max_hold forces release.
         assert VoiceSession._should_release(
             None, now=30.0, last_space=10.0, hold_start=9.0, max_hold=15.0) is True
+
+
+class TestPiperSpeak:
+    def test_speak_uses_synthesize_wav(self, monkeypatch):
+        import voice.tts as T
+        from voice.tts import PiperTTS
+
+        v = PiperTTS("/fake/model.onnx")  # load fails -> _voice None, _error set
+
+        calls = {}
+
+        class FakeVoice:
+            def synthesize_wav(self, text, wav_file, **kw):
+                wav_file.setframerate(16000)
+                wav_file.setsampwidth(2)
+                wav_file.setnchannels(1)
+                wav_file.writeframes(b"\x00" * 200)
+                calls["text"] = text
+
+        v._voice = FakeVoice()
+        v._error = None
+        monkeypatch.setattr(T, "_play_wav", lambda p: None)  # no real playback
+        v.speak("hello there")
+        assert calls.get("text") == "hello there"
+
+    def test_speak_does_not_raise_on_failure(self):
+        from voice.tts import PiperTTS
+
+        v = PiperTTS("/fake/model.onnx")
+
+        class BoomVoice:
+            def synthesize_wav(self, text, wav_file, **kw):
+                raise RuntimeError("boom")
+
+        v._voice = BoomVoice()
+        v._error = None
+        # must not raise
+        v.speak("hi")
+
+
+class TestControllerSpeakSafe:
+    def test_speak_swallows_tts_errors(self):
+        from voice.ptt import VoiceController
+        from voice.tts import OffTTS
+
+        class BoomTTS:
+            def is_available(self):
+                return True
+            def speak(self, text):
+                raise RuntimeError("playback died")
+
+        ctrl = VoiceController(recorder=OffRecorder(), stt=FakeSTT(), tts=BoomTTS())
+        # must not raise out of the controller
+        ctrl.speak("response")
