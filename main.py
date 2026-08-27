@@ -232,7 +232,7 @@ async def main() -> int:
 
     voice = VoiceSession(
         VoiceController(
-            recorder=SounddeviceRecorder(EnergyVAD()),
+            recorder=SounddeviceRecorder(EnergyVAD(), device=settings.get("mic_device")),
             stt=VoskSTT(settings.get("vosk_model_path")),
             tts=PiperTTS(settings.get("piper_voice_path")),
         ),

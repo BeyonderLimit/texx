@@ -268,13 +268,15 @@ class TestComponentStatus:
                 return self._a
             def unavailable_reason(self):
                 return self._r
+            def device_label(self):
+                return "default"
 
         ctrl = VoiceController()
         ctrl.recorder = C(True)
         ctrl.stt = C(False, "no model path configured")
         ctrl.tts = C(True)
         out = ctrl.component_status()
-        assert "Mic: loaded" in out
+        assert "Mic: loaded (default)" in out
         assert "Vosk: no model path configured" in out
         assert "Piper: loaded" in out
 

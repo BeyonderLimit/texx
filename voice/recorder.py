@@ -41,8 +41,9 @@ class SounddeviceRecorder:
     SAMPLERATE = 16000
     BLOCK = 4096  # bytes per read (~128 ms at 16 kHz/16-bit)
 
-    def __init__(self, vad: VoiceActivityDetector | None = None):
+    def __init__(self, vad: VoiceActivityDetector | None = None, device=None):
         self.vad = vad or EnergyVAD()
+        self._device = device  # None => system default; else index or name
         self._sd = None
         self._error: str | None = None
         self._stream = None
@@ -60,6 +61,34 @@ class SounddeviceRecorder:
     def unavailable_reason(self) -> str:
         return self._error or "available"
 
+    def device_label(self) -> str:
+        if not self.is_available():
+            return self.unavailable_reason()
+        if self._device is None:
+            return "default"
+        return str(self._device)
+
+    @staticmethod
+    def list_input_devices() -> list[dict]:
+        """Return input-capable devices as [{'index','name','channels'}]."""
+        try:
+            import sounddevice as sd  # type: ignore
+        except (ImportError, OSError):
+            return []
+        out = []
+        try:
+            for i, dev in enumerate(sd.query_devices()):
+                ch = dev.get("max_input_channels", 0)
+                if ch and ch > 0:
+                    out.append({
+                        "index": i,
+                        "name": dev.get("name", f"device {i}"),
+                        "channels": ch,
+                    })
+        except Exception:  # noqa: BLE001
+            return out
+        return out
+
     def begin(self) -> None:
         """Open the mic stream and start accumulating audio (hold-to-talk start)."""
         if not self.is_available() or self._stream is not None:
@@ -69,6 +98,7 @@ class SounddeviceRecorder:
         self._stream = sd.RawInputStream(
             samplerate=self.SAMPLERATE, blocksize=self.BLOCK // 2,
             dtype="int16", channels=1, callback=self._on_audio,
+            device=self._device,
         )
         self._stream.start()
 
@@ -106,7 +136,7 @@ class SounddeviceRecorder:
         try:
             with sd.RawInputStream(
                 samplerate=self.SAMPLERATE, blocksize=block_samples,
-                dtype="int16", channels=1,
+                dtype="int16", channels=1, device=self._device,
             ) as stream:
                 while True:
                     block = bytes(stream.read(block_samples)[0])

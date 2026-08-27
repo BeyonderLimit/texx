@@ -39,7 +39,10 @@ class VoiceController:
     def component_status(self) -> str:
         def _part(label, comp):
             if comp.is_available():
-                return f"{label}: loaded"
+                label_extra = ""
+                if label == "Mic":
+                    label_extra = f" ({comp.device_label()})"
+                return f"{label}: loaded{label_extra}"
             reason = getattr(comp, "unavailable_reason", lambda: "unavailable")()
             return f"{label}: {reason}"
         return " · ".join([
