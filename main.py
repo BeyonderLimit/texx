@@ -179,6 +179,7 @@ async def main() -> int:
         ),
         app, router, executor, states,
     )
+    executor.ctx.voice = voice
 
     slash_ctx = SimpleNamespace(settings=settings, states=states, system=executor.ctx.system,
                                 reminders=executor.ctx.reminders, time=time_service,

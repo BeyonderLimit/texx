@@ -183,3 +183,37 @@ class TestHoldToTalk:
     def test_begin_unavailable(self):
         ctrl = VoiceController(recorder=OffRecorder(), stt=FakeSTT(), tts=OffTTS())
         assert ctrl.begin_capture() is False
+
+
+class TestStatusVoiceLine:
+    def test_voice_line_unavailable(self):
+        from core.executor import _voice_status_line
+        fake = SimpleNamespace(
+            ctrl=SimpleNamespace(is_available=lambda: False,
+                                 unavailable_reason=lambda: "vosk not installed"),
+            is_active=False)
+        assert _voice_status_line(SimpleNamespace(voice=fake)) == "off (vosk not installed)"
+
+    def test_voice_line_active(self):
+        from core.executor import _voice_status_line
+        fake = SimpleNamespace(
+            ctrl=SimpleNamespace(is_available=lambda: True, unavailable_reason=lambda: "available"),
+            is_active=True)
+        assert _voice_status_line(SimpleNamespace(voice=fake)) == "ON (hold Space to talk)"
+
+    def test_voice_line_ready_off(self):
+        from core.executor import _voice_status_line
+        fake = SimpleNamespace(
+            ctrl=SimpleNamespace(is_available=lambda: True, unavailable_reason=lambda: "available"),
+            is_active=False)
+        assert _voice_status_line(SimpleNamespace(voice=fake)) == "ready (off)"
+
+    def test_full_status_includes_voice(self):
+        from services.systeminfo import full_status
+        out = full_status(
+            SimpleNamespace(state=SimpleNamespace(value="idle")),
+            SimpleNamespace(get=lambda k, d=None: "normal"),
+            SimpleNamespace(list_pending=lambda *a, **k: []),
+            SimpleNamespace(context=lambda: {"time": "10:00", "date": "Mon"}),
+            tasks=None, voice="ON (hold Space to talk)")
+        assert "Voice:     ON (hold Space to talk)" in out

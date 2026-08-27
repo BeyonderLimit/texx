@@ -138,7 +138,7 @@ def todo_items(tasks_service, limit: int = 8) -> list[str]:
     return out
 
 
-def full_status(states, settings, reminders, time_service, tasks=None) -> str:
+def full_status(states, settings, reminders, time_service, tasks=None, voice=None) -> str:
     from datetime import datetime
     from core.state import AssistantState
     c = time_service.context()
@@ -153,6 +153,7 @@ def full_status(states, settings, reminders, time_service, tasks=None) -> str:
         f"Volume:     {volume()}",
         f"Brightness: {brightness()}",
         f"Processes:  {running_processes()}",
+        f"Voice:     {voice}",
         "",
         f"Next event/timer: {upcoming_event(reminders)}",
         "",

@@ -141,7 +141,7 @@ def normalize_display(name: str) -> str:
 
 class ExecutorContext:
     def __init__(self, settings: Settings, system: SystemService,
-                 web=None, wiki=None, files=None, weather=None, llm=None):
+                 web=None, wiki=None, files=None, weather=None, llm=None, voice=None):
         self.settings = settings
         self.system = system
         self.time = TimeService(settings)
@@ -155,6 +155,7 @@ class ExecutorContext:
         from services.weather import WeatherProvider
         self.weather = weather if weather is not None else WeatherProvider()
         self.llm = llm
+        self.voice = voice
         self.last_file_results: list = []
         self.last_web_results: list = []
         self._chat_history: list = []
@@ -304,7 +305,20 @@ async def timer_start(command, ctx):
 @register("system.status")
 async def system_status(command, ctx):
     from services.systeminfo import full_status
-    return full_status(ctx.states, ctx.settings, ctx.reminders, ctx.time, ctx.tasks)
+    voice_line = _voice_status_line(ctx)
+    return full_status(ctx.states, ctx.settings, ctx.reminders, ctx.time, ctx.tasks,
+                       voice=voice_line)
+
+
+def _voice_status_line(ctx) -> str:
+    voice = getattr(ctx, "voice", None)
+    if voice is None:
+        return "n/a"
+    if not voice.ctrl.is_available():
+        return f"off ({voice.ctrl.unavailable_reason()})"
+    if getattr(voice, "is_active", False):
+        return "ON (hold Space to talk)"
+    return "ready (off)"
 
 
 @register("info.query")
