@@ -2,19 +2,28 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
+.eggs/
+build/
+dist/
+*.so
 
-# Virtual environments
+# Virtual environment
 .venv/
 venv/
 
-# Test tooling
+# Test / tooling caches
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
-# Local data (runtime DB lives in ~/.local/share/texx)
+# Runtime data
 *.db
+*.db-journal
+local/
 
-# Editors / OS / tooling locals
+# Editor / OS
+.DS_Store
+*.swp
 .idea/
 .vscode/
-.DS_Store
 .claude/settings.local.json*

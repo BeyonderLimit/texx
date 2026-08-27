@@ -1,0 +1,11 @@
+include README.md
+include LICENSE.md
+include HELP.md
+include AGENTS.md
+include CLAUDE.md
+include texx-build.md
+include Build-Status.md
+include requirements.txt
+include requirements-dev.txt
+recursive-include storage/migrations *.sql
+recursive-include storage *.sql

@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "texx"
+version = "1.0.0"
+description = "Offline-first deterministic personal assistant for Linux with a Rich TUI."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE.md" }
+authors = [{ name = "the Texx authors" }]
+keywords = ["assistant", "offline", "cli", "rich", "tui", "linux"]
+dependencies = [
+    "rich>=13.0",
+    "rapidfuzz>=3.0",
+]
+
+[project.optional-dependencies]
+llm = ["llama-cpp-python>=0.3.0"]
+voice = ["vosk>=0.3.45", "sounddevice>=0.4.0", "piper-tts>=1.5.0"]
+dev = ["pytest", "pytest-asyncio"]
+
+[project.urls]
+Homepage = "https://github.com/your-org/texx"
+Repository = "https://github.com/your-org/texx"
+
+[tool.setuptools]
+py-modules = ["main", "config"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["core*", "services*", "intents*", "llm*", "voice*", "ui*", "storage*"]
+exclude = ["tests*", "*.tests", "*.tests.*"]
