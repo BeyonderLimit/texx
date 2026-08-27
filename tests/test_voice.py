@@ -359,3 +359,49 @@ class TestControllerSpeakSafe:
         ctrl = VoiceController(recorder=OffRecorder(), stt=FakeSTT(), tts=BoomTTS())
         # must not raise out of the controller
         ctrl.speak("response")
+
+
+class TestVoiceSetDirResolution:
+    def test_voice_set_dir_with_onnx_routes_piper(self, tmp_path):
+        from core.slash import _voice_set_route
+        d = tmp_path / "piper"
+        d.mkdir()
+        (d / "en.onnx").write_text("x")
+        captured = {}
+        voice = SimpleNamespace(set_vosk=lambda p: "v",
+                                set_piper=lambda p: captured.setdefault("p", p) or "pok")
+        _voice_set_route(voice, str(d))
+        assert captured["p"] == str(d / "en.onnx")
+
+    def test_voice_set_dir_without_onnx_routes_vosk(self, tmp_path):
+        from core.slash import _voice_set_route
+        d = tmp_path / "vosk"
+        d.mkdir()
+        (d / "conf.json").write_text("{}")
+        captured = {}
+        voice = SimpleNamespace(set_vosk=lambda p: captured.setdefault("p", p) or "vok",
+                                set_piper=lambda p: "p")
+        _voice_set_route(voice, str(d))
+        assert captured["p"] == str(d)
+
+    def test_piper_set_dir_passes_through(self, tmp_path):
+        from core.slash import handle
+        d = tmp_path / "piper"
+        d.mkdir()
+        (d / "en.onnx").write_text("x")
+        captured = {}
+        voice = SimpleNamespace(set_piper=lambda p: captured.setdefault("p", p) or "pok")
+        ctx = SimpleNamespace(voice=voice)
+        asyncio.run(handle("/piper set " + str(d), ctx))
+        # real resolution happens inside VoiceSession.set_piper; the slash
+        # handler just forwards the path it was given
+        assert captured["p"] == str(d)
+
+    def test_resolve_piper_path_finds_onnx(self, tmp_path):
+        from main import resolve_piper_path
+        d = tmp_path / "piper"
+        d.mkdir()
+        (d / "en.onnx").write_text("x")
+        assert resolve_piper_path(str(d)) == str(d / "en.onnx")
+        # a direct file path is returned unchanged
+        assert resolve_piper_path(str(d / "en.onnx")) == str(d / "en.onnx")

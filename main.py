@@ -21,6 +21,19 @@ from voice.tts import PiperTTS
 from voice.vad import EnergyVAD
 
 
+def resolve_piper_path(path: str) -> str:
+    """Resolve a user-supplied Piper path: a directory is mapped to the .onnx
+    inside it (PiperVoice.load expects the model file, not its folder)."""
+    from pathlib import Path
+
+    p = Path(path).expanduser()
+    if p.is_dir():
+        onnx = next((f for f in p.glob("*.onnx")), None)
+        if onnx is not None:
+            return str(onnx)
+    return str(p)
+
+
 class VoiceSession:
     """Push-to-talk voice mode: hold Space to record, release to send. Bridges the
     VoiceController to the existing route+execute pipeline and the TUI."""
@@ -203,12 +216,14 @@ class VoiceSession:
                 f"{self.ctrl.stt.unavailable_reason()}.")
 
     def set_piper(self, path: str) -> str:
-        self.executor.ctx.settings.set("piper_voice_path", path)
         from voice.tts import PiperTTS
-        self.ctrl.tts = PiperTTS(path)
+
+        resolved_str = resolve_piper_path(path)
+        self.executor.ctx.settings.set("piper_voice_path", resolved_str)
+        self.ctrl.tts = PiperTTS(resolved_str)
         if self.ctrl.tts.is_available():
-            return f"Piper voice loaded from {path}."
-        return (f"Set Piper voice path to {path}, but it can't load yet: "
+            return f"Piper voice loaded from {resolved_str}."
+        return (f"Set Piper voice path to {resolved_str}, but it can't load yet: "
                 f"{self.ctrl.tts.unavailable_reason()}.")
 
 

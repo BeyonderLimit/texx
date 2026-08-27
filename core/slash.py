@@ -266,6 +266,9 @@ async def handle(text: str, ctx) -> str:
 def _voice_set_route(voice, path: str) -> str:
     p = Path(path).expanduser()
     if p.is_dir():
+        onnx = next((f for f in p.glob("*.onnx")), None)
+        if onnx is not None:
+            return voice.set_piper(str(onnx))
         return voice.set_vosk(str(p))
     if path.endswith(".onnx"):
         return voice.set_piper(path)

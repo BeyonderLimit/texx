@@ -24,15 +24,21 @@ class OffTTS:
 
 
 def _play_wav(path: Path) -> None:
-    """Play a WAV via a system player, fully detached (non-blocking, no TUI pollution)."""
+    """Play a WAV via a system player, waiting for playback to finish.
+
+    We must block until the player exits: the caller deletes the temp file
+    right after this returns, so a detached/non-blocking launch would read a
+    file that's already gone and stay silent.
+    """
     for player in ("paplay", "aplay", "play"):
         try:
-            subprocess.Popen(
+            subprocess.run(
                 [player, str(path)],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 stdin=subprocess.DEVNULL,
                 start_new_session=True,
+                check=False,
             )
             return
         except (FileNotFoundError, OSError):
