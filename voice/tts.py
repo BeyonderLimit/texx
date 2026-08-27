@@ -24,15 +24,16 @@ class OffTTS:
 
 
 def _play_wav(path: Path) -> None:
-    """Play a WAV via a system player, waiting for playback to finish.
+    """Play a WAV, raising if no backend succeeds (so the caller can surface it).
 
-    We must block until the player exits: the caller deletes the temp file
-    right after this returns, so a detached/non-blocking launch would read a
-    file that's already gone and stay silent.
+    Tries system players first, then falls back to sounddevice (already a voice
+    dependency) which uses the same audio stack as the mic. We block until the
+    player exits, because the caller deletes the temp file right after return.
     """
+    last_err = None
     for player in ("paplay", "aplay", "play"):
         try:
-            subprocess.run(
+            r = subprocess.run(
                 [player, str(path)],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
@@ -40,9 +41,26 @@ def _play_wav(path: Path) -> None:
                 start_new_session=True,
                 check=False,
             )
-            return
-        except (FileNotFoundError, OSError):
+            if r.returncode == 0:
+                return
+            last_err = f"{player} exited {r.returncode}"
+        except (FileNotFoundError, OSError) as e:
+            last_err = str(e)
             continue
+    # Fallback: play directly via sounddevice (lazy import).
+    try:
+        import wave
+
+        import sounddevice as sd  # type: ignore
+
+        with wave.open(str(path), "rb") as wf:
+            data = wf.readframes(wf.getnframes())
+            sd.play(data, samplerate=wf.getframerate())
+            sd.wait()
+        return
+    except Exception as e:  # noqa: BLE001
+        last_err = f"{last_err}; sounddevice fallback failed: {e}"
+    raise RuntimeError(f"no audio backend could play the clip ({last_err})")
 
 
 class PiperTTS:
@@ -81,16 +99,21 @@ class PiperTTS:
         try:
             import wave
 
-            with wave.open(str(wav_path), "wb") as wav_file:
-                # synthesize_wav sets the WAV header params from the model config
-                # and writes the audio; the bare `synthesize` API only yields
-                # chunks and would leave the header unset (wave close -> error).
+            wav_file = wave.open(str(wav_path), "wb")
+            try:
+                # synthesize_wav sets the WAV header params from the model
+                # config and writes the audio; the bare `synthesize` API only
+                # yields chunks and would leave the header unset. If it raises,
+                # close the (headerless) file without masking the real cause.
                 self._voice.synthesize_wav(text, wav_file)
+            except BaseException:
+                try:
+                    wav_file.close()
+                except Exception:  # noqa: BLE001
+                    pass
+                raise
+            wav_file.close()
             _play_wav(wav_path)
-        except Exception as e:  # noqa: BLE001
-            # Playback must never crash the caller (e.g. voice mode).
-            import sys
-            print(f"[piper] TTS failed: {e}", file=sys.stderr)
         finally:
             try:
                 wav_path.unlink()

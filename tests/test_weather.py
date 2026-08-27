@@ -111,6 +111,26 @@ def test_weather_routing(tmp_path):
     assert router.route("what's my battery level?").intent == "info.query"
 
 
+def test_weather_routing_freeform_voice(tmp_path):
+    ctx, router, _ = make(tmp_path)
+    # Natural-language STT phrasings must not fall through to the LLM.
+    for text in [
+        "latest weather please",
+        "give me the weather",
+        "okay norm can you give me the weather",
+        "weather please",
+        "check the weather outside",
+        "what's the weather like",
+        "tell me the weather",
+    ]:
+        assert router.route(text).intent == "weather.query", text
+    # But command-style utterances that merely mention weather must keep their
+    # own intent (the loose pattern must not steal them).
+    assert router.route("remind me to check the weather tomorrow").intent == "reminder.create"
+    assert router.route("add task check weather report").intent == "task.add"
+
+
+
 def test_set_location_persists_and_is_used(tmp_path):
     ctx, router, executor = make(tmp_path)
     fake = FakeWeather()

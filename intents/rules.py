@@ -17,7 +17,15 @@ RENAME_PATTERNS = [
 SET_NAME_QUERY = re.compile(r"^(?:what(?:'s| is) your name\??|who are you\??)$", re.IGNORECASE)
 HELP_PATTERN = re.compile(r"^(?:help|what can you do\??|commands\??|capabilities\??|\?)$", re.IGNORECASE)
 
-TIME_QUERY = re.compile(r"^(?:what(?:'s| is)? the time|what time is it)\??$", re.IGNORECASE)
+TIME_QUERY = re.compile(
+    r"^(?:what(?:'s| is)?\s+(?:the\s+|a\s+)?(?:current\s+)?time"
+    r"(?:\s+(?:right\s+now|now|today))?"
+    r"|what\s+time\s+is\s+it"
+    r"|tell\s+me\s+(?:the\s+)?(?:current\s+)?time"
+    r"|time(?:\s+please)?"
+    r")\??$",
+    re.IGNORECASE,
+)
 DATE_QUERY = re.compile(
     r"^(?:what(?:'s| is)? the date(?: today)?\??|what day is it(?: today)?\??|what(?:'s| is) today\??)$",
     re.IGNORECASE,
@@ -38,7 +46,8 @@ DONE_REMINDER = re.compile(r"^(?:mark\s+)?reminder\s+#?(?P<id>\d+)\s+(?:as\s+)?(
 DELETE_REMINDER = re.compile(r"^(?:delete|remove|cancel)\s+(?:the\s+)?reminder\s+#?(?P<id>\d+)$", re.IGNORECASE)
 
 TIMER_RE = re.compile(
-    r"^(?:start|set|run)?\s*(?:a\s+|an\s+)?(?P<n>\d+)\s*[:\-]?\s*"
+    r"^(?:start|set|run|create)?\s*(?:a\s+|an\s+)?(?:timer|alarm)?\s*(?:for\s+)?"
+    r"(?P<n>\d+)\s*[:\-]?\s*"
     r"(?P<unit>seconds?|secs?|minutes?|mins?|hours?|hrs?)\s*(?:timer|alarm)?$",
     re.IGNORECASE,
 )
@@ -104,12 +113,25 @@ def match_brief(text: str) -> Command | None:
 STATUS_RE = re.compile(r"^(?:status|system status|full status)$", re.IGNORECASE)
 WEATHER_DAY = r"(?:today|tonight|tomorrow)"
 WEATHER_RES = [
-    re.compile(rf"^weather(?:\s+(?:forecast|report|update))?(?:\s+{WEATHER_DAY})?\??$", re.IGNORECASE),
     re.compile(
-        rf"^what(?:'s| is)(?:\s+the)?\s+weather(?:\s+(?:like|forecast|report|outside))?(?:\s+{WEATHER_DAY})?\??$",
+        rf"^weather(?:\s+(?:forecast|report|update|now|please))?(?:\s+{WEATHER_DAY})?\??$",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"^what(?:'s| is)(?:\s+the)?\s+weather(?:\s+(?:like|forecast|report|outside|now))?(?:\s+{WEATHER_DAY})?\??$",
         re.IGNORECASE,
     ),
     re.compile(rf"^how(?:'s| is)\s+(?:the\s+)?weather(?:\s+{WEATHER_DAY})?\??$", re.IGNORECASE),
+    # Loose: any utterance that asks for weather with a request cue, allowing
+    # conversational filler ("okay norm can you give me the weather"). Never
+    # matches command-style leads (remind/task/add/...) so it can't steal them.
+    re.compile(
+        r"^(?!.*\b(?:remind|remember|reminder|task|todo|add|create|set|goal|note|"
+        r"delete|cancel|close|open)\b)"
+        r".*\b(?:get|give|tell|show|check|what(?:'s| is)|how(?:'s| is)|latest|current)\b"
+        r".*\bweather\b",
+        re.IGNORECASE,
+    ),
 ]
 CONDITION_RE = re.compile(
     rf"^will it (?:be\s+)?(?P<cond>raining|rainy|rain|sunny|cloudy|overcast|snowing|snowy|hot|cold|warm)"

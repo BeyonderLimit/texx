@@ -330,7 +330,7 @@ class TestPiperSpeak:
         v.speak("hello there")
         assert calls.get("text") == "hello there"
 
-    def test_speak_does_not_raise_on_failure(self):
+    def test_speak_propagates_failure(self):
         from voice.tts import PiperTTS
 
         v = PiperTTS("/fake/model.onnx")
@@ -341,8 +341,12 @@ class TestPiperSpeak:
 
         v._voice = BoomVoice()
         v._error = None
-        # must not raise
-        v.speak("hi")
+        # Errors now propagate so the controller/TUI can surface them.
+        try:
+            v.speak("hi")
+            assert False, "expected RuntimeError"
+        except RuntimeError as e:
+            assert "boom" in str(e)
 
 
 class TestControllerSpeakSafe:
@@ -405,3 +409,54 @@ class TestVoiceSetDirResolution:
         assert resolve_piper_path(str(d)) == str(d / "en.onnx")
         # a direct file path is returned unchanged
         assert resolve_piper_path(str(d / "en.onnx")) == str(d / "en.onnx")
+
+
+class TestTtsCommand:
+    def _ctx(self, tts):
+        class FakeCtrl:
+            def __init__(self, t): self.tts = t
+        class FakeVoice:
+            def __init__(self, t): self.ctrl = FakeCtrl(t)
+        return SimpleNamespace(voice=FakeVoice(tts))
+
+    def test_tts_speaks_when_available(self):
+        from core.slash import handle
+        spoken = {}
+
+        class FakeTTS:
+            def is_available(self):
+                return True
+            def unavailable_reason(self):
+                return "ok"
+            def speak(self, text):
+                spoken["t"] = text
+
+        out = asyncio.run(handle("/tts hello world", self._ctx(FakeTTS())))
+        assert spoken.get("t") == "hello world"
+        assert out == "Spoke: hello world"
+
+    def test_tts_unavailable_reports(self):
+        from core.slash import handle
+
+        class FakeTTS:
+            def is_available(self):
+                return False
+            def unavailable_reason(self):
+                return "no voice path configured"
+
+        out = asyncio.run(handle("/tts hi", self._ctx(FakeTTS())))
+        assert "TTS not available" in out
+
+    def test_tts_failure_reports(self):
+        from core.slash import handle
+
+        class FakeTTS:
+            def is_available(self):
+                return True
+            def unavailable_reason(self):
+                return "ok"
+            def speak(self, text):
+                raise RuntimeError("playback died")
+
+        out = asyncio.run(handle("/tts hi", self._ctx(FakeTTS())))
+        assert "TTS failed" in out

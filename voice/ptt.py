@@ -20,10 +20,12 @@ class VoiceController:
     """
 
     def __init__(self, recorder: Recorder | None = None, stt: SpeechToText | None = None,
-                 tts: TextToSpeech | None = None, vad: VoiceActivityDetector | None = None):
+                 tts: TextToSpeech | None = None, vad: VoiceActivityDetector | None = None,
+                 console=None):
         self.recorder = recorder if recorder is not None else SounddeviceRecorder(vad or EnergyVAD())
         self.stt = stt if stt is not None else VoskSTT()
         self.tts = tts if tts is not None else OffTTS()
+        self.console = console
         self.enabled = False
 
     def is_available(self) -> bool:
@@ -84,8 +86,12 @@ class VoiceController:
         try:
             self.tts.speak(text)
         except Exception as e:  # noqa: BLE001
-            import sys
-            print(f"[voice] TTS error (ignored): {e}", file=sys.stderr)
+            msg = f"[voice] TTS error (ignored): {e}"
+            if self.console is not None:
+                self.console.print(f"[red]{msg}[/]")
+            else:
+                import sys
+                print(msg, file=sys.stderr)
 
     async def converse(self, handler: UtteranceHandler, speak: bool = True) -> str | None:
         """Capture one utterance, run it through `handler` (route+execute), then

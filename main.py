@@ -64,21 +64,6 @@ class VoiceSession:
         self.states.set(AssistantState.IDLE)
         return response
 
-    async def _read_keys(self, queue: "asyncio.Queue[str]", fd: int):
-        """Async stdin reader (yields to the event loop instead of blocking it).
-        Terminal is already in cbreak mode; we only read keys here."""
-        import sys
-
-        loop = asyncio.get_event_loop()
-        try:
-            while self._running:
-                ch = await loop.run_in_executor(None, sys.stdin.read, 1)
-                if not ch:
-                    break
-                await queue.put(ch)
-        except (OSError, ValueError):
-            pass
-
     async def _stop_and_process(self):
         self.app.console.print("[dim]■ transcribing…[/]")
         text = await self.ctrl.finish_capture()
@@ -112,24 +97,41 @@ class VoiceSession:
         gap as a release — otherwise recordings get cut to ~200ms. We learn the
         repeat interval from the first repeat, then fire release once the gap grows
         well beyond it.
+
+        Stdin is read via the event loop's reader callback (not a background
+        thread) so that when voice mode ends there is no lingering reader that
+        could swallow the first keystrokes typed back at the main prompt.
         """
+        import os
         import sys
         import termios
         import tty
         import time
 
+        loop = asyncio.get_event_loop()
         fd = sys.stdin.fileno()
         old_term = termios.tcgetattr(fd)
         tty.setcbreak(fd)
         queue: "asyncio.Queue[str]" = asyncio.Queue()
-        reader = asyncio.create_task(self._read_keys(queue, fd))
-        self.app.console.print(
-            "[bold]Voice mode — hold [cyan]Space[/] to talk, [cyan]Esc[/] to exit.[/]")
-        recording = False
-        last_space = 0.0
-        repeat_interval = None  # unknown until first auto-repeat arrives
-        hold_start = 0.0
+
+        def _feed() -> None:
+            try:
+                data = os.read(fd, 256)
+            except (OSError, ValueError):
+                return
+            if not data:
+                return
+            for b in data:
+                queue.put_nowait(chr(b))
+
         try:
+            loop.add_reader(fd, _feed)
+            self.app.console.print(
+                "[bold]Voice mode — hold [cyan]Space[/] to talk, [cyan]Esc[/] to exit.[/]")
+            recording = False
+            last_space = 0.0
+            repeat_interval = None  # unknown until first auto-repeat arrives
+            hold_start = 0.0
             while self._running:
                 try:
                     ch = await asyncio.wait_for(queue.get(), timeout=0.05)
@@ -164,12 +166,15 @@ class VoiceSession:
         except Exception as e:  # noqa: BLE001
             self.app.console.print(f"[red]Voice mode error:[/] {e}")
         finally:
+            try:
+                loop.remove_reader(fd)
+            except (OSError, ValueError):
+                pass
             if recording:
                 try:
                     await self._stop_and_process()
                 except Exception:
                     pass
-            reader.cancel()
             try:
                 termios.tcsetattr(fd, termios.TCSADRAIN, old_term)
             except (OSError, ValueError):
@@ -250,6 +255,7 @@ async def main() -> int:
             recorder=SounddeviceRecorder(EnergyVAD(), device=settings.get("mic_device")),
             stt=VoskSTT(settings.get("vosk_model_path")),
             tts=PiperTTS(settings.get("piper_voice_path")),
+            console=app.console,
         ),
         app, router, executor, states,
     )

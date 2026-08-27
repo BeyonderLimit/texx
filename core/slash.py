@@ -31,6 +31,8 @@ SLASH_COMMANDS: dict[str, SlashCommand] = {
     "/voice": SlashCommand("/voice", "[on | off | set PATH]", "Voice mode status, start, stop, or set a model"),
     "/vosk": SlashCommand("/vosk", "set PATH", "Point Texx at a Vosk model directory"),
     "/piper": SlashCommand("/piper", "set PATH", "Point Texx at a Piper voice .onnx"),
+    "/tts": SlashCommand("/tts", "[text]", "Speak text aloud (tests the TTS voice)"),
+    "/log": SlashCommand("/log", "[N]", "Show recent log entries (errors/faults)"),
     "/tasks": SlashCommand("/tasks", "", "List open tasks"),
     "/mode": SlashCommand("/mode", "[normal|silent|dnd]", "Get or set notification mode"),
     "/brief": SlashCommand("/brief", "", "Show a summary of your day"),
@@ -247,6 +249,31 @@ async def handle(text: str, ctx) -> str:
         if arg.lower().startswith("set "):
             arg = arg[4:].strip()
         return voice.set_piper(arg)
+    if name == "/tts":
+        voice = getattr(ctx, "voice", None)
+        if voice is None or not hasattr(voice, "ctrl"):
+            return "Voice subsystem is not initialized."
+        tts = voice.ctrl.tts
+        if not tts.is_available():
+            return f"TTS not available: {tts.unavailable_reason()}. Set a voice with /piper set <path>."
+        text = arg.strip()
+        if not text:
+            return "Usage: /tts <text to speak>"
+        try:
+            tts.speak(text)
+        except Exception as e:  # noqa: BLE001
+            return f"TTS failed: {e}"
+        return f"Spoke: {text}"
+    if name == "/log":
+        from services.log import recent
+        try:
+            n = int(arg.strip()) if arg.strip() else 40
+        except ValueError:
+            n = 40
+        entries = recent(n)
+        if not entries:
+            return "No log entries yet."
+        return "\n".join(entries)
     if name == "/name":
         if arg:
             ctx.settings.set("assistant_name", arg)

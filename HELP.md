@@ -163,6 +163,8 @@ always-listening. It needs three local assets (all optional — Texx runs withou
 | `/voice set /path` | Point Texx at a model: a **directory** sets Vosk STT, a **`.onnx`** file sets Piper TTS (auto-routes, hot-reloads) |
 | `/vosk set /path/to/model` | Point Texx at a downloaded Vosk model (hot-reloads) |
 | `/piper set /path/to/voice.onnx` | Point Texx at a Piper voice (hot-reloads) |
+| `/tts <text>` | Speak text aloud to test the TTS voice (reports if unavailable or on error) |
+| `/log [N]` | Show the last N log entries — errors and query/network faults (default 40) |
 
 While voice mode is on, the terminal switches to raw key mode: hold the **Space**
 bar and speak — recording stops the moment you release (detected via the gap in

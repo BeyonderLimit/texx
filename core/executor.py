@@ -12,6 +12,7 @@ from services.files import FileSearchService
 from services.tasks import TaskService
 from services.time import TimeService
 from services.webcache import WebCache
+from services.log import log_error, log_fault
 
 HANDLERS = {}
 
@@ -393,6 +394,7 @@ async def weather_query(command, ctx):
     try:
         data, from_cache = _load_weather(ctx)
     except OnlineError as e:
+        log_fault("weather lookup failed", error=str(e))
         return f"Weather unavailable: {e}."
     note = "(cached)\n" if from_cache else ""
 
@@ -566,6 +568,7 @@ async def web_search(command, ctx):
         try:
             results = ctx.web.search(query)
         except OnlineError as e:
+            log_fault("web search failed", query=query, error=str(e))
             return f"Web search unavailable: {e}."
         ctx.cache.set(key, results, ttl_seconds=3600)
     else:
@@ -592,6 +595,7 @@ async def knowledge_wiki(command, ctx):
         try:
             data = ctx.wiki.summary(topic)
         except OnlineError as e:
+            log_fault("wikipedia lookup failed", topic=topic, error=str(e))
             return f"Wikipedia unavailable: {e}."
         ctx.cache.set(key, data, ttl_seconds=86400)
     extract = data["extract"].split(". ")
@@ -648,6 +652,7 @@ async def article_read(command, ctx):
     try:
         text = ctx.web.fetch_page_text(url)
     except OnlineError as e:
+        log_fault("article fetch failed", url=url, error=str(e))
         return f"Could not fetch the article: {e}."
     if not text.strip():
         return "No readable text found at that URL."
@@ -782,6 +787,11 @@ class Executor:
         self.ctx.states = states
 
     async def execute(self, command) -> str:
+        if getattr(command, "source", None) == "fallback":
+            log_fault(
+                "query routed to LLM fallback (no deterministic intent)",
+                text=command.slots.get("text", ""),
+            )
         try:
             check(command, self.ctx.system)
         except PermissionDenied as e:
@@ -793,6 +803,7 @@ class Executor:
         fn = HANDLERS.get(command.intent)
         if fn is None:
             self.states.set(AssistantState.ERROR)
+            log_error(f"no handler registered for intent '{command.intent}'")
             return f"No handler for intent '{command.intent}'."
         self.states.set(AssistantState.EXECUTING)
         self.bus.publish_sync(Event(EventType.COMMAND_EXECUTING, {"intent": command.intent}))
@@ -804,6 +815,10 @@ class Executor:
             return f"I don't know how to open '{e}'."
         except Exception as e:
             self.states.set(AssistantState.IDLE)
+            log_error(
+                f"handler raised for intent '{command.intent}'",
+                error=str(e), text=getattr(command.slots, "get", lambda k: None)("text"),
+            )
             self.bus.publish_sync(Event(EventType.COMMAND_FAILED, {"intent": command.intent, "error": str(e)}))
             return f"Something went wrong: {e}"
         self.states.set(AssistantState.IDLE)
