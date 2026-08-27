@@ -23,7 +23,8 @@ Type `help` at any time to see this list.
 | Local file search + open results | ✅ Live |
 | Briefing (`brief`), appointments listing | ✅ Local data only |
 | Weather — current conditions + today/tomorrow forecast, location setting | ✅ Live |
-| External calendar sync, article extraction (`read result N`) | ⬜ Phase 4 remainder |
+| External calendar import (local `.ics` files) | ✅ Live |
+| Article extraction (`read result N` / `/read N`) | ✅ Live |
 | LLM conversation, writing, explanations | ⬜ Phase 5 |
 | Voice — push-to-talk input, spoken replies (incl. dictation) | ⬜ Phase 6 |
 
@@ -123,10 +124,11 @@ Notes:
 |---|---|
 | `search for rust benchmarks` / `google X` / `look up X` | Web search via DuckDuckGo (no API key), cached 1 hour |
 | `open result 2` | Opens that result — file in your file manager, web result in your browser |
+| `read result 2` / `read article 1` / `/read N` | Fetches and displays article text from a search result |
 | `who was Alan Turing?` / `tell me about photosynthesis` / `wikipedia X` | Wikipedia summary (cached 24h) |
 
 Works offline gracefully: if there's no network you get a clear message, and cached
-results still answer. `/web QUERY` and `/find NAME` are slash shortcuts.
+results still answer. `/web QUERY`, `/find NAME`, and `/read N` are slash shortcuts.
 
 ### Weather
 
@@ -181,7 +183,15 @@ Status listings are **always silent** — they never trigger audio, in any mode.
 | `list appointments` / `appointments today` | Your upcoming scheduled events |
 | `brief` / `good morning` / `/brief` | Day summary: time, mode, today's events, upcoming, reminders + goals counts |
 
-Appointments and briefings run off your local schedule. External calendar sync and weather join in Phase 4.
+Appointments and briefings run off your local schedule. Import external calendars with `/ical`.
+
+### Calendar import
+| Say | Does |
+|---|---|
+| `import calendar from ~/work.ics` / `load calendar from /path/to/cal.ics` | Parses a local `.ics` file and shows upcoming events (30-day window) |
+| `/ical ~/work.ics` | Same — slash shortcut |
+
+Events from imported calendars are displayed for reference but don't modify your local reminders.
 
 ### Time & dates
 | Say | Does |

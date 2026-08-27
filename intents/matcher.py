@@ -20,6 +20,7 @@ from intents.rules import (
     match_knowledge,
     match_local_find,
     match_open_result,
+    match_read_result,
     match_web_search,
     match_open_app,
     match_recall,
@@ -41,6 +42,7 @@ from intents.rules import (
     match_timer,
     match_weekday,
     match_remember,
+    match_import_calendar,
 )
 
 INTENT_EXAMPLES = {
@@ -78,6 +80,7 @@ class RuleMatcher:
             match_help,
             match_timer,
             match_open_result,
+            match_read_result,
             match_time_query,
             match_date_query,
             match_weekday,
@@ -115,6 +118,7 @@ class RuleMatcher:
             match_local_find,
             match_web_search,
             match_knowledge,
+            match_import_calendar,
         ):
             result = matcher(text)
             if result:

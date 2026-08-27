@@ -591,6 +591,25 @@ async def file_open_result(command, ctx):
     return "Nothing to open yet — use 'find <name>' or 'search for <query>' first."
 
 
+@register("article.read")
+async def article_read(command, ctx):
+    n = command.slots["n"]
+    urls = getattr(ctx, "last_web_results", [])
+    if not urls:
+        return "No search results to read — use 'search for <query>' first."
+    if not 1 <= n <= len(urls):
+        return f"Result {n} doesn't exist ({len(urls)} results). Try 'search' again."
+    url = urls[n - 1]
+    try:
+        text = ctx.web.fetch_page_text(url)
+    except OnlineError as e:
+        return f"Could not fetch the article: {e}."
+    if not text.strip():
+        return "No readable text found at that URL."
+    title_m = text[:80].split("\n")
+    return f"{url}\n\n{text[:3000]}"
+
+
 @register("calendar.appointments")
 async def calendar_appointments(command, ctx):
     rows = [r for r in ctx.reminders.list_pending(category="event") if r["due_at"]]
@@ -603,6 +622,31 @@ async def calendar_appointments(command, ctx):
         lines.append(f"#{r['id']}  {r['task']} — {when}")
     note = "\n(Local schedule only — external calendar sync arrives in Phase 4.)"
     return "\n".join(lines) + note
+
+
+@register("calendar.import")
+async def calendar_import(command, ctx):
+    path_str = command.slots["path"]
+    from pathlib import Path
+    from services.calendar import parse_ics
+    filepath = Path(path_str).expanduser().resolve()
+    if not filepath.exists():
+        return f"File not found: {filepath}"
+    if not filepath.suffix.lower() == ".ics":
+        return f"Not an ICS file: {filepath.name}"
+    events = parse_ics(filepath)
+    if not events:
+        return f"No upcoming events found in {filepath.name}."
+    lines = [f"Imported {len(events)} event(s) from {filepath.name}:", ""]
+    for ev in events[:8]:
+        start = datetime.fromisoformat(ev["start"])
+        when = start.strftime("%A, %B %d at %I:%M %p").replace(" at 0", " at ").replace(" 0", " ", 1)
+        loc = f" @ {ev['location']}" if ev["location"] else ""
+        lines.append(f"• {ev['summary']} — {when}{loc}")
+    if len(events) > 8:
+        lines.append(f"\n... and {len(events) - 8} more.")
+    lines.append(f"\nTotal: {len(events)} events in the next 30 days.")
+    return "\n".join(lines)
 
 
 @register("assistant.brief")

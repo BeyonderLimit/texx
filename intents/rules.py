@@ -649,3 +649,35 @@ def match_rename(text: str, current_name: str) -> Command | None:
             confidence=0.99,
         )
     return None
+
+
+READ_RESULT_RE = re.compile(
+    r"^read\s+(?:(?:result|article)\s+)?(\d+)$", re.IGNORECASE
+)
+
+
+def match_read_result(text: str) -> Command | None:
+    m = READ_RESULT_RE.match(text.strip())
+    if m:
+        return Command(
+            intent="article.read",
+            slots={"n": int(m.group(1))},
+            confidence=0.85,
+        )
+    return None
+
+
+IMPORT_CALENDAR_RE = re.compile(
+    r"^(?:import|load|add|sync)\s+calendar\s+(?:from\s+)?(.+)$", re.IGNORECASE
+)
+
+
+def match_import_calendar(text: str) -> Command | None:
+    m = IMPORT_CALENDAR_RE.match(text.strip())
+    if m and m.group(1).strip():
+        return Command(
+            intent="calendar.import",
+            slots={"path": m.group(1).strip()},
+            confidence=0.85,
+        )
+    return None

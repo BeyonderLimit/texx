@@ -24,6 +24,8 @@ SLASH_COMMANDS: dict[str, SlashCommand] = {
     "/todo": SlashCommand("/todo", "", "List open tasks (alias: /tasks)"),
     "/web": SlashCommand("/web", "QUERY", "Search the web (cached 1h)"),
     "/find": SlashCommand("/find", "NAME", "Search local files"),
+    "/read": SlashCommand("/read", "N", "Read article from result N (after search)"),
+    "/ical": SlashCommand("/ical", "PATH", "Import events from an .ics calendar file"),
     "/tasks": SlashCommand("/tasks", "", "List open tasks"),
     "/mode": SlashCommand("/mode", "[normal|silent|dnd]", "Get or set notification mode"),
     "/brief": SlashCommand("/brief", "", "Show a summary of your day"),
@@ -168,6 +170,18 @@ async def handle(text: str, ctx) -> str:
         if not arg:
             return "Usage: /find <name>"
         return await file_find(_Cmd(intent="file.find", slots={"query": arg}), ctx)
+    if name == "/read":
+        from core.executor import article_read
+        from core.commands import Command as _Cmd
+        if not arg or not arg.isdigit():
+            return "Usage: /read <result_number>"
+        return await article_read(_Cmd(intent="article.read", slots={"n": int(arg)}), ctx)
+    if name == "/ical":
+        from core.executor import calendar_import
+        from core.commands import Command as _Cmd
+        if not arg:
+            return "Usage: /ical /path/to/calendar.ics"
+        return await calendar_import(_Cmd(intent="calendar.import", slots={"path": arg}), ctx)
     if name == "/name":
         if arg:
             ctx.settings.set("assistant_name", arg)

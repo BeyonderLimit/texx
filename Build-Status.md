@@ -11,9 +11,9 @@ Core principle: **LLM understands and talks. Deterministic code decides and acts
 
 | Item | State |
 |---|---|
-| Current phase | **Phase 4 — Knowledge services** (search portion done; weather/calendar/extraction remain) |
-| Latest build | Build 14 |
-| Tests | 110 passed |
+| Current phase | **Phase 4 — Knowledge services** ✅ COMPLETE |
+| Latest build | Build 16 |
+| Tests | 139 passed |
 | LLM | Not installed (by design until Phase 5) |
 | Voice | Not started (Phase 6) |
 
@@ -255,6 +255,28 @@ Functions added: `WebCache.get/set`, `WebSearchProvider.search/_parse/fetch_page
 
 ---
 
+**Build 16 — Article extraction + external calendar import**
+
+Status: COMPLETE — Phase 4 fully delivered
+
+- [x] `services/calendar.py` — `parse_ics()`: reads local `.ics` files, extracts events within
+  configurable horizon (default 30 days), parses DTSTART/DTEND, SUMMARY, DESCRIPTION,
+  LOCATION, UID; handles compact and folded formats
+- [x] `read result N` / `read article N` / `read N` intent → `article.read` handler:
+  fetches URL text via `WebSearchProvider.fetch_page_text()`, returns article body
+  (up to 3000 chars); graceful offline error handling
+- [x] `import calendar from /path/to/cal.ics` intent → `calendar.import` handler:
+  validates `.ics` extension, parses events, displays upcoming with times and locations
+- [x] Slash: `/read N` (read article from web result), `/ical PATH` (import calendar file)
+- [x] Matcher order: `match_read_result` placed immediately after `match_open_result`
+  (both reference result indices); `match_import_calendar` placed at end (low collision risk)
+- [x] 17 new tests: `test_article.py` (7) + `test_calendar.py` (10) — all mocked, offline
+- [x] HELP.md updated: article extraction in web section, new calendar import section,
+  updated "What's built" table
+- [x] Phase 4 now COMPLETE: search + Wikipedia + weather + calendar import + article extraction
+
+---
+
 ## Roadmap
 
 | Phase | Scope | Status |
@@ -264,7 +286,7 @@ Functions added: `WebCache.get/set`, `WebSearchProvider.search/_parse/fetch_page
 | 2 | Reminder engine (one-time, NL dates, recurrence, helper loop, timers, modes) | ✅ Complete |
 | 3 | Memory engine (explicit memory, filtered candidates, FTS5 retrieval, importance scoring, expiration) | ✅ Complete |
 | 3.5 | Extensions delivered alongside: tasks with priority + TTL, notes | ✅ Complete |
-| 4 | Knowledge: ✅ web search + Wikipedia + caching + local file search · ⬜ weather, external calendar, article extraction | 🔶 In progress |
+| 4 | Knowledge: ✅ web search + Wikipedia + caching + local file search + weather + calendar import + article extraction | ✅ Done |
 | 5 | Local LLM (`llama-cpp-python`, structured JSON output, schema validation, automatic memory extraction) | ⬜ |
 | 6 | Voice (Piper TTS, Vosk STT, VAD, PTT, dictation) | ⬜ |
 
