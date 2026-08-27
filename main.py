@@ -22,7 +22,10 @@ from voice.vad import EnergyVAD
 
 
 class VoiceSession:
-    """Bridges the VoiceController to the existing route+execute pipeline and the TUI."""
+    """Push-to-talk voice mode: hold Space to record, release to send. Bridges the
+    VoiceController to the existing route+execute pipeline and the TUI."""
+
+    RELEASE_GAP_S = 0.2  # gap in key-repeat chars => Space was released
 
     def __init__(self, controller, app, router, executor, states):
         self.ctrl = controller
@@ -32,6 +35,11 @@ class VoiceSession:
         self.states = states
         self.task = None
         self._running = False
+        self.active = False
+
+    @property
+    def is_active(self) -> bool:
+        return self.active
 
     async def _on_utterance(self, text: str) -> str:
         self.app.console.print(f"[dim]You (voice):[/] {text}")
@@ -43,25 +51,77 @@ class VoiceSession:
         self.states.set(AssistantState.IDLE)
         return response
 
-    async def _loop(self):
-        self._running = True
-        self.ctrl.enabled = True
-        while self._running:
-            try:
-                await self.ctrl.converse(self._on_utterance, speak=True)
-            except Exception:
-                continue
-        self.ctrl.enabled = False
+    async def _ptt_loop(self):
+        """Hold-Space push-to-talk. Terminal is switched to cbreak so we see each
+        key immediately. Space key-down starts a capture; the stop is detected by
+        the gap in OS auto-repeat chars while the key is held."""
+        import select
+        import sys
+        import termios
+        import tty
+        import time
+
+        fd = sys.stdin.fileno()
+        old_term = termios.tcgetattr(fd)
+        tty.setcbreak(fd)
+        recording = False
+        last_space = 0.0
+        try:
+            self.app.console.print(
+                "[bold]Voice mode — hold [cyan]Space[/] to talk, [cyan]Esc[/] to exit.[/]")
+            while self._running:
+                r, _, _ = select.select([sys.stdin], [], [], 0.05)
+                if r:
+                    ch = sys.stdin.read(1)
+                    if ch == " ":
+                        now = time.time()
+                        if not recording:
+                            if self.ctrl.begin_capture():
+                                recording = True
+                                last_space = now
+                                self.app.console.print("[red]●[/] recording… release Space to send")
+                        else:
+                            last_space = now  # auto-repeat: still held
+                    elif ch in ("\x1b",):  # Esc exits PTT
+                        self._running = False
+                        break
+                    # any other key is ignored in PTT mode
+                elif recording and (time.time() - last_space) > self.RELEASE_GAP_S:
+                    recording = False
+                    self.app.console.print("[dim]■ transcribing…[/]")
+                    text = await self.ctrl.finish_capture()
+                    if text:
+                        response = await self._on_utterance(text)
+                        self.ctrl.speak(response)
+                    else:
+                        self.app.console.print("[dim](no speech detected)[/]")
+        except Exception as e:  # noqa: BLE001
+            self.app.console.print(f"[red]Voice mode error:[/] {e}")
+        finally:
+            if recording:
+                try:
+                    await self.ctrl.finish_capture()
+                except Exception:
+                    pass
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_term)
+            self.active = False
+            self.ctrl.enabled = False
+            self.app.console.print("[dim]Voice mode off.[/]")
 
     def start(self) -> str:
-        if self.task is None or self.task.done():
-            self.task = asyncio.create_task(self._loop())
-            return "Voice mode on — speak after the beep. Use /voice off to stop."
-        return "Voice mode already on."
+        if self.active:
+            return "Voice mode already on."
+        if not self.ctrl.is_available():
+            return (f"Can't start voice ({self.ctrl.unavailable_reason()}). "
+                    "Install vosk + a model and sounddevice, then re-run Texx.")
+        self._running = True
+        self.active = True
+        self.task = asyncio.create_task(self._ptt_loop())
+        return "Voice mode on — hold Space to talk."
 
     def stop(self) -> str:
         self._running = False
-        self.ctrl.enabled = False
+        self.active = False
         if self.task is not None:
             self.task.cancel()
             self.task = None
@@ -71,8 +131,8 @@ class VoiceSession:
         if not self.ctrl.is_available():
             return (f"Voice is not active ({self.ctrl.unavailable_reason()}). "
                     "Install vosk + a model and sounddevice to enable it.")
-        active = self.task is not None and not self.task.done()
-        return "Voice is active — speak anytime." if active else "Voice ready (use /voice on)."
+        return "Voice ready — use /voice on (hold Space to talk)." if not self.active \
+            else "Voice mode active — hold Space to talk, Esc to exit."
 
     def set_vosk(self, path: str) -> str:
         self.executor.ctx.settings.set("vosk_model_path", path)
@@ -143,6 +203,11 @@ async def main() -> int:
 
     try:
         while True:
+            if voice.is_active:
+                # Push-to-talk loop owns the terminal while voice mode is on.
+                await voice.task
+                voice.task = None
+                continue
             try:
                 text = (await app.prompt_async()).strip()
             except (EOFError, KeyboardInterrupt):

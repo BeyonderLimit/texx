@@ -158,14 +158,17 @@ always-listening. It needs three local assets (all optional — Texx runs withou
 | Say | Does |
 |---|---|
 | `/voice` | Voice status (which pieces are present) |
-| `/voice on` | Start the listening loop — speak after it's ready; `/voice off` stops it |
+| `/voice on` | Enter voice mode: **hold `Space` to talk, release to send, `Esc` to exit** |
+| `/voice off` | Leave voice mode (also `Esc` from within it) |
 | `/vosk set /path/to/model` | Point Texx at a downloaded Vosk model (hot-reloads) |
 | `/piper set /path/to/voice.onnx` | Point Texx at a Piper voice (hot-reloads) |
 
-The pipeline per utterance is: **record → VAD endpoint → Vosk → route/execute →
-Piper speaks the reply**. If only some pieces exist (e.g. STT but no TTS), the
-reply still prints — it just isn't spoken. VAD is a dependency-free energy
-detector, so no extra model is needed for endpointing.
+While voice mode is on, the terminal switches to raw key mode: hold the **Space**
+bar and speak — recording stops the moment you release (detected via the gap in
+key auto-repeats), then the audio is transcribed, routed, executed, and spoken
+back. If only some pieces exist (e.g. STT but no TTS), the reply still prints —
+it just isn't spoken. VAD is a dependency-free energy detector used only as a
+fallback for the continuous path.
 
 ### Weather
 

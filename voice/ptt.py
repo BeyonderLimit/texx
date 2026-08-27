@@ -46,6 +46,23 @@ class VoiceController:
             return None
         return await loop.run_in_executor(None, self.stt.transcribe, audio)
 
+    def begin_capture(self) -> bool:
+        """Hold-to-talk start: open the mic and begin accumulating audio."""
+        if not self.is_available():
+            return False
+        self.recorder.begin()
+        return True
+
+    async def finish_capture(self) -> str | None:
+        """Hold-to-talk end: stop the mic, transcribe the captured audio, return text."""
+        if not self.is_available():
+            return None
+        loop = asyncio.get_event_loop()
+        audio = await loop.run_in_executor(None, self.recorder.end)
+        if not audio:
+            return None
+        return await loop.run_in_executor(None, self.stt.transcribe, audio)
+
     def speak(self, text: str) -> None:
         if self.tts.is_available():
             self.tts.speak(text)

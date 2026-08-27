@@ -145,3 +145,41 @@ class TestModelSlash:
         out = asyncio.run(handle("/piper set /models/voice.onnx", ctx))
         assert captured["p"] == "/models/voice.onnx"
         assert out == "/models/voice.onnx"
+
+
+class FakePTTRecorder:
+    def __init__(self, audio=b"pttaudio"):
+        self.audio = audio
+        self.began = False
+        self.ended = False
+    def is_available(self):
+        return True
+    def begin(self):
+        self.began = True
+    def end(self):
+        self.ended = True
+        return self.audio
+    def record_until_silence(self, *a, **k):
+        return self.audio
+
+
+class TestHoldToTalk:
+    def test_begin_and_finish(self):
+        rec = FakePTTRecorder()
+        stt = FakeSTT(text="set a timer")
+        ctrl = VoiceController(recorder=rec, stt=stt, tts=OffTTS())
+        assert ctrl.begin_capture() is True
+        assert rec.began is True
+        out = asyncio.run(ctrl.finish_capture())
+        assert rec.ended is True
+        assert out == "set a timer"
+
+    def test_finish_without_begin_returns_none(self):
+        rec = FakePTTRecorder(audio=None)
+        ctrl = VoiceController(recorder=rec, stt=FakeSTT(), tts=OffTTS())
+        out = asyncio.run(ctrl.finish_capture())
+        assert out is None
+
+    def test_begin_unavailable(self):
+        ctrl = VoiceController(recorder=OffRecorder(), stt=FakeSTT(), tts=OffTTS())
+        assert ctrl.begin_capture() is False

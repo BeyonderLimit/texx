@@ -310,11 +310,14 @@ Status: COMPLETE (integration layer; Vosk/Piper/sounddevice optional, lazy-loade
 - [x] `voice/stt.py` — `SpeechToText` protocol; `VoskSTT` (lazy `vosk`, 16k mono PCM); `OffSTT` no-op
 - [x] `voice/vad.py` — `VoiceActivityDetector` protocol; `EnergyVAD` dependency-free RMS endpointing
 - [x] `voice/recorder.py` — `Recorder` protocol; `SounddeviceRecorder` (lazy `sounddevice`,
-  16 kHz/16-bit, VAD endpointing) + `OffRecorder`
+  16 kHz/16-bit) with `begin()`/`end()` hold-to-talk capture + VAD `record_until_silence`
+  fallback; `OffRecorder`
 - [x] `voice/ptt.py` — `VoiceController`: capture→STT→handler→TTS; `is_available()` requires
   recorder+STT, TTS is a bonus; capture runs in an executor thread
-- [x] `main.py` — `VoiceSession` bridges controller to route+execute+TUI; `/voice on|off`
-  starts/stops a concurrent listening loop (state machine wired: PROCESSING etc.)
+- [x] `main.py` — `VoiceSession` is **true hold-Space push-to-talk**: terminal switches to
+  cbreak, Space key-down starts capture, release is detected by the gap in OS
+  key-repeat chars; `Esc` exits. Main loop awaits the PTT task instead of the text
+  prompt while voice is active (state machine wired: PROCESSING etc.)
 - [x] Slash: `/voice [on|off]`, `/vosk set PATH`, `/piper set PATH` (hot-reload model paths)
 - [x] Installed optional deps: `vosk`, `sounddevice`, `piper-tts` (+ onnxruntime)
 - [x] 15 tests (`tests/test_voice.py`) with fakes — VAD, availability, capture, converse
