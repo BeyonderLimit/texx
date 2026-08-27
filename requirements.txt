@@ -1,2 +1,5 @@
 rich>=13.0
 rapidfuzz>=3.0
+# Optional: only needed for local LLM conversation (Phase 5). Texx runs fully
+# without it; install to enable /llm with a GGUF model.
+llama-cpp-python>=0.3.0

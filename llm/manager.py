@@ -39,9 +39,7 @@ class LLMManager:
     def unavailable_reason(self) -> str:
         if self._engine is None:
             return "no engine"
-        if isinstance(self._engine, UnavailableEngine):
-            return "no model configured"
-        return getattr(self._engine, "unavailable_reason", lambda: "unknown")()
+        return self._engine.unavailable_reason()
 
     def respond(self, user_text: str, history: list[ChatMessage] | None = None) -> str:
         if not self.is_available():

@@ -93,7 +93,7 @@ class LocalLLM:
 
 
 def build_engine(model_path: str | None) -> "LocalLLM | UnavailableEngine":
-    engine = LocalLLM(model_path)
-    if engine.is_available():
-        return engine
-    return UnavailableEngine()
+    """Return a LocalLLM even when it fails to load — it tracks the real
+    failure reason internally, so callers can report it honestly instead of
+    seeing a generic 'no model configured'."""
+    return LocalLLM(model_path)
