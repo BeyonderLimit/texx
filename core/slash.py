@@ -11,6 +11,8 @@ class SlashCommand:
 SLASH_COMMANDS: dict[str, SlashCommand] = {
     "/help": SlashCommand("/help", "", "Show this quick reference"),
     "/time": SlashCommand("/time", "[timezone]", "Show time/date, or set timezone"),
+    "/weather": SlashCommand("/weather", "[place]", "Weather now + forecast today"),
+    "/location": SlashCommand("/location", "[place]", "Get or set your location"),
     "/apps": SlashCommand("/apps", "", "List allowlisted apps (open/close)"),
     "/allow": SlashCommand("/allow", "open|close NAME [COMMAND...]", "Add an app to an allowlist"),
     "/disallow": SlashCommand("/disallow", "open|close NAME", "Remove an app from an allowlist"),
@@ -102,6 +104,20 @@ async def handle(text: str, ctx) -> str:
             ok = TimeService(ctx.settings).set_timezone(arg)
             return f"Timezone set to {arg}." if ok else f"'{arg}' is not a valid timezone (e.g. America/New_York)."
         return _time_report(ctx)
+    if name == "/weather":
+        from core.executor import weather_query
+        from core.commands import Command as _Cmd
+        slots = {"day": "", "condition": ""}
+        if arg:
+            slots["location"] = arg.strip()
+        return await weather_query(_Cmd(intent="weather.query", slots=slots), ctx)
+    if name == "/location":
+        if arg:
+            place = arg.strip()
+            ctx.settings.set("location", place)
+            return f"Location set to {place}."
+        current = ctx.settings.get("location")
+        return f"Location: {current}" if current else "No location set. Try '/location New Haven'."
     if name == "/apps":
         open_map, close_map = ctx.system.open_map(), ctx.system.close_map()
         openable = ", ".join(sorted(open_map))

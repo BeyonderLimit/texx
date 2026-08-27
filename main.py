@@ -37,7 +37,8 @@ async def main() -> int:
                                 reminders=executor.ctx.reminders, time=time_service,
                                 memory=executor.ctx.memory, tasks=executor.ctx.tasks,
                                 cache=executor.ctx.cache, web=executor.ctx.web,
-                                wiki=executor.ctx.wiki, files=executor.ctx.files)
+                                wiki=executor.ctx.wiki, files=executor.ctx.files,
+                                weather=executor.ctx.weather)
     executor.ctx.memory.purge_expired()
     executor.ctx.tasks.purge_expired()
 

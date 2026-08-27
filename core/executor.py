@@ -112,7 +112,7 @@ def normalize_display(name: str) -> str:
 
 class ExecutorContext:
     def __init__(self, settings: Settings, system: SystemService,
-                 web=None, wiki=None, files=None):
+                 web=None, wiki=None, files=None, weather=None):
         self.settings = settings
         self.system = system
         self.time = TimeService(settings)
@@ -123,6 +123,8 @@ class ExecutorContext:
         self.web = web if web is not None else WebSearchProvider()
         self.wiki = wiki if wiki is not None else WikipediaProvider()
         self.files = files if files is not None else FileSearchService()
+        from services.weather import WeatherProvider
+        self.weather = weather if weather is not None else WeatherProvider()
         self.last_file_results: list = []
         self.last_web_results: list = []
 
@@ -280,6 +282,103 @@ async def info_query(command, ctx):
     kind = command.slots["kind"]
     value = {"battery": battery, "volume": volume, "brightness": brightness}[kind]()
     return f"{kind.capitalize()}: {value}"
+
+
+WEATHER_TTL_SECONDS = 1800
+
+
+def _weather_key(ctx) -> str:
+    loc = (ctx.settings.get("location") or "").strip().lower()
+    return f"weather:{loc or '_auto'}"
+
+
+def _load_weather(ctx):
+    """Shared weather lookup for handlers and the briefing.
+    Returns (data, from_cache)."""
+    key = _weather_key(ctx)
+    data = ctx.cache.get(key)
+    if data is None:
+        loc = (ctx.settings.get("location") or "").strip() or None
+        data = ctx.weather.current(loc)
+        ctx.cache.set(key, data, ttl_seconds=WEATHER_TTL_SECONDS)
+        return data, False
+    return data, True
+
+
+def _pick_forecast(forecasts, day_word):
+    idx = 1 if day_word == "tomorrow" else 0
+    if not forecasts:
+        return None, ""
+    if idx >= len(forecasts):
+        idx = len(forecasts) - 1
+    label = {"tomorrow": "Tomorrow", "tonight": "Tonight"}.get(day_word, "Today")
+    return forecasts[idx], label
+
+
+def _answer_condition(condition: str, entry: dict) -> str:
+    desc = (entry.get("desc") or "")
+    lowered = desc.lower()
+    rain = int(entry.get("rain_pct") or 0)
+    maxc = int(entry.get("max_c") or 0)
+    chance = f"; rain chance up to {rain}%" if rain else ""
+
+    def has(*words):
+        return any(w in lowered for w in words)
+
+    if condition.startswith("rain"):
+        yes = rain >= 40 or has("rain", "drizzle", "shower", "thunder")
+    elif condition.startswith("snow"):
+        yes = has("snow", "sleet")
+    elif condition == "sunny":
+        yes = has("sun", "clear")
+    elif condition in ("cloudy", "overcast"):
+        yes = has("cloud", "overcast")
+    elif condition in ("hot", "warm"):
+        yes = maxc >= (28 if condition == "hot" else 22)
+    else:  # cold
+        yes = maxc <= 5
+
+    detail = f"{desc or 'no clear sky description'}; high {maxc}°C{chance}"
+    return f"Yes — looks {condition}: {detail}." if yes else \
+        f"Probably not — forecast says {detail}."
+
+
+@register("weather.query")
+async def weather_query(command, ctx):
+    try:
+        data, from_cache = _load_weather(ctx)
+    except OnlineError as e:
+        return f"Weather unavailable: {e}."
+    note = "(cached)\n" if from_cache else ""
+
+    cur = data["current"]
+    header = f"{data['place']}: {cur['desc']}, {cur['temp_c']}°C ({cur['temp_f']}°F)" \
+             f", feels like {cur['feels_c']}°C."
+    if not ctx.settings.get("location"):
+        header += "\n(That's a rough guess from your IP — set one with 'set location to New Haven'.)"
+
+    entry, label = _pick_forecast(data["forecasts"], command.slots.get("day") or "today")
+
+    condition = (command.slots.get("condition") or "").strip().lower()
+    if condition and entry is not None:
+        return f"{note}{header}\n{_answer_condition(condition, entry)}"
+    if entry is None:
+        return f"{note}{header}"
+
+    days = (datetime.strptime(entry["date"], "%Y-%m-%d").strftime("%a %b %d")
+            if entry.get("date") else "")
+    rain = f"; rain chance up to {entry['rain_pct']}%" if entry.get("rain_pct") else ""
+    when = f"{label} ({days}): " if days else f"{label}: "
+    body = (f"{when}{entry['desc']}, high {entry['max_c']}°C ({entry['max_f']}°F)"
+            f" / low {entry['min_c']}°C ({entry['min_f']}°F){rain}.")
+    return f"{note}{header}\n{body}"
+
+
+@register("location.set")
+async def location_set(command, ctx):
+    place = command.slots["location"].rstrip(".!")
+    ctx.settings.set("location", place)
+    return f"Location set to {place}."
 
 
 @register("memory.store")
@@ -526,6 +625,20 @@ async def assistant_brief(command, ctx):
 
     lines = [f"{c['date']} — {c['time']} ({c['timezone']})", f"Mode: {mode}", ""]
 
+    # Current conditions appear once you've asked for weather recently —
+    # the briefing itself never blocks on the network.
+    try:
+        wdata = ctx.cache.get(_weather_key(ctx))
+        cur = wdata.get("current") if isinstance(wdata, dict) else None
+        if cur:
+            where = f" in {wdata['place']}" if wdata.get("place") else ""
+            lines.append(
+                f"Weather{where}: {cur['desc']}, {cur['temp_c']}°C ({cur['temp_f']}°F)"
+            )
+            lines.append("")
+    except Exception:
+        pass
+
     if today_events:
         lines.append("TODAY")
         for r in today_events[:5]:
@@ -555,22 +668,19 @@ async def assistant_brief(command, ctx):
         f"REMINDERS: {len(one_time)} pending · GOALS: {len(goals)} active · "
         f"TASKS: {len(tasks)} open"
     )
-
-    lines.append("")
-    lines.append("(Weather + external calendar join the briefing in Phase 4.)")
     return "\n".join(lines)
 
 
 class Executor:
     def __init__(self, bus: EventBus, states: StateManager, settings: Settings,
                  system: SystemService | None = None, timers=None, web=None, wiki=None,
-                 files=None):
+                 files=None, weather=None):
         self.bus = bus
         self.states = states
         self.ctx = ExecutorContext(
             settings,
             system if system is not None else SystemService(settings),
-            web=web, wiki=wiki, files=files,
+            web=web, wiki=wiki, files=files, weather=weather,
         )
         if timers is None:
             from core.timers import TimerManager

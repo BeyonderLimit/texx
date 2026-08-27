@@ -92,7 +92,7 @@ def test_brief_contains_sections(tmp_path):
     assert "UPCOMING" in response
     assert "dentist" in response
     assert "GOALS: 1 active" in response
-    assert "Phase 4" in response
+    assert "Phase 4" not in response  # placeholder footer retired once weather landed
 
 
 def test_good_morning_gives_brief(tmp_path):

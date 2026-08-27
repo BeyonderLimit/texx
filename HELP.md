@@ -22,8 +22,8 @@ Type `help` at any time to see this list.
 | Web search (DuckDuckGo) + Wikipedia summaries, cached | ✅ Live |
 | Local file search + open results | ✅ Live |
 | Briefing (`brief`), appointments listing | ✅ Local data only |
-| Weather feeds, external calendar sync | ⬜ Phase 4 remainder |
-| Article extraction / reading pages aloud | ⬜ Phase 4 remainder |
+| Weather — current conditions + today/tomorrow forecast, location setting | ✅ Live |
+| External calendar sync, article extraction (`read result N`) | ⬜ Phase 4 remainder |
 | LLM conversation, writing, explanations | ⬜ Phase 5 |
 | Voice — push-to-talk input, spoken replies (incl. dictation) | ⬜ Phase 6 |
 
@@ -127,6 +127,22 @@ Notes:
 
 Works offline gracefully: if there's no network you get a clear message, and cached
 results still answer. `/web QUERY` and `/find NAME` are slash shortcuts.
+
+### Weather
+
+Current conditions plus a short forecast, via wttr.in (no API key) and cached 30 min.
+Status answers stay silent, as always.
+
+| Say | Does |
+|---|---|
+| `weather` / `weather?` | Current conditions + today's forecast |
+| `weather tomorrow` / `weather tonight` | Forecast for the chosen day |
+| `will it rain tomorrow?` / `will it be sunny today?` | Yes/no answer from the forecast data |
+| `set location to New Haven` / `change my location to Boston` | Persist your place |
+| `/weather [place]` | Slash shortcut (optionally for another city right now) |
+
+Without a saved location Texx uses an approximate IP-based guess and tells you how to
+set something precise. Ask `weather` once and your `brief` starts including conditions.
 
 ### Local file search
 Searches Documents, Downloads, Desktop, and your home folder by fuzzy name match.
@@ -243,6 +259,8 @@ Slash commands are handled instantly by the TUI — no intent routing involved.
 | `/memories` | List long-term memories |
 | `/todo` / `/tasks` | List open tasks sorted by priority |
 | `/mode [normal\|silent\|dnd]` | Get or set notification mode |
+| `/weather [place]` | Weather now for your saved location (or a given one) |
+| `/location [place]` | Get or set your location |
 | `/brief` | Show a summary of your day |
 | `/time [timezone]` | Show time/date, or set your timezone |
 | `/apps` | List allowlisted apps that can be opened/closed |

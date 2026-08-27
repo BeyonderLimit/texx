@@ -102,6 +102,54 @@ def match_brief(text: str) -> Command | None:
 
 
 STATUS_RE = re.compile(r"^(?:status|system status|full status)$", re.IGNORECASE)
+WEATHER_DAY = r"(?:today|tonight|tomorrow)"
+WEATHER_RES = [
+    re.compile(rf"^weather(?:\s+(?:forecast|report|update))?(?:\s+{WEATHER_DAY})?\??$", re.IGNORECASE),
+    re.compile(
+        rf"^what(?:'s| is)(?:\s+the)?\s+weather(?:\s+(?:like|forecast|report|outside))?(?:\s+{WEATHER_DAY})?\??$",
+        re.IGNORECASE,
+    ),
+    re.compile(rf"^how(?:'s| is)\s+(?:the\s+)?weather(?:\s+{WEATHER_DAY})?\??$", re.IGNORECASE),
+]
+CONDITION_RE = re.compile(
+    rf"^will it (?:be\s+)?(?P<cond>raining|rainy|rain|sunny|cloudy|overcast|snowing|snowy|hot|cold|warm)"
+    rf"(?:\s+{WEATHER_DAY})?\??$",
+    re.IGNORECASE,
+)
+SET_LOCATION_RE = re.compile(
+    r"^(?:set |change )?(?:my )?location to (?P<location>.+?)\??$", re.IGNORECASE
+)
+
+
+def match_weather(text: str) -> Command | None:
+    stripped = text.strip()
+    m = CONDITION_RE.match(stripped)
+    if m:
+        day_m = re.search(WEATHER_DAY, stripped, re.IGNORECASE)
+        return Command(
+            intent="weather.query",
+            slots={"day": (day_m.group(0) if day_m else ""), "condition": m.group("cond").lower()},
+            confidence=0.9,
+        )
+    for pattern in WEATHER_RES:
+        m = pattern.match(stripped)
+        if m:
+            day_m = re.search(WEATHER_DAY, stripped, re.IGNORECASE)
+            return Command(
+                intent="weather.query",
+                slots={"day": (day_m.group(0) if day_m else ""), "condition": ""},
+                confidence=0.95,
+            )
+    return None
+
+
+def match_set_location(text: str) -> Command | None:
+    m = SET_LOCATION_RE.match(text.strip())
+    if m and m.group("location").strip():
+        return Command(intent="location.set", slots={"location": m.group("location").strip()}, confidence=0.99)
+    return None
+
+
 INFO_QUERIES = {
     "battery": re.compile(
         r"^(?:what(?:'s| is)(?: the| my)? battery(?: level)?|battery(?: level)?)\??$",
