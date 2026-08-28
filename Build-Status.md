@@ -328,7 +328,7 @@ lazy-imported so Texx runs identically without them; model files are user-suppli
 
 ---
 
-## Phase 7 — Memory layering, OWNER profile & session archive (planned)
+## Phase 7 — Memory layering, OWNER profile & session archive (implemented)
 
 Design goal (from the memory-layer audit): add tiered memory (persistent / daily /
 discussion), a curated `OWNER.md` profile, a searchable raw session-log archive, and
@@ -361,9 +361,11 @@ no short-term compaction/cleanup.
   `add_discussion` helpers; `compact_discussion(older_than)` (fold/delete >7d),
   `prune_daily(older_than)` (>90d), `search(layers=...)` bounded.
 - `services/sessionlog.py` (new): `SessionLogService` — `start_session`,
-  `log_turn(role, intent, content)`, `end_session`, `search(q, limit)` over
-  `session_fts`. Subscribes to `EventBus` (`USER_INPUT_RECEIVED`, `INTENT_MATCHED`,
-  `COMMAND_COMPLETED`) so logging is fire-and-forget, off the response path.
+  `log_turn(role, intent, content)`, `end_session`, `search(q, limit)`,
+  `get_nearby(turn_id)`, `recent(n)` over `session_fts`. In `main.py` its
+  `log_turn` is driven by `EventBus` subscribers for `USER_INPUT_RECEIVED` and
+  `COMMAND_COMPLETED` (which also write the short-term `discussion` memory), so
+  logging is fire-and-forget, off the response path.
 - `services/owner.py` (new): `OwnerProfile` — reads/writes `OWNER.md`;
   `regen_from_memories()` builds a curated profile via LLM, **debounced** (every ~10
   min or every N writes) in the background.
@@ -374,7 +376,7 @@ no short-term compaction/cleanup.
   daily (LLM), compact old discussion, prune stale daily, debounced OWNER regen.
 - `intents/rules.py` + `core/slash.py` + `HELP.md`: `/sessions [query]` (review/search
   session logs — recovers exact wording + nearby context), `/owner` (print OWNER.md),
-  `/memory compact` (manual trigger).
+  `/compact` (manual trigger: fold discussion → daily, prune stale, refresh OWNER.md).
 
 ### Tests
 - `tests/test_memory_layers.py`: layer routing (remember→persistent; daily/discussion
@@ -410,7 +412,7 @@ no short-term compaction/cleanup.
 | 4 | Knowledge: ✅ web search + Wikipedia + caching + local file search + weather + calendar import + article extraction | ✅ Done |
 | 5 | Local LLM integration: ✅ optional `llama-cpp-python` layer, conversation.chat, auto memory extraction, /llm command | ✅ Done |
 | 6 | Voice: ✅ Vosk STT + Piper TTS + EnergyVAD + sounddevice recorder + PTT loop, /voice /vosk /piper | ✅ Done |
-| 7 | Memory layering (persistent/daily/discussion), OWNER.md profile, searchable session-log archive, time-based compaction — non-latency-preserving design | Planned (design complete) |
+| 7 | Memory layering (persistent/daily/discussion), OWNER.md profile, searchable session-log archive, time-based compaction — non-latency-preserving design | ✅ Implemented (committed) |
 
 ---
 
