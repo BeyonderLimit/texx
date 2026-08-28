@@ -10,6 +10,46 @@ from voice.vad import EnergyVAD, VoiceActivityDetector
 
 UtteranceHandler = Callable[[str], Awaitable[str]]
 
+# Words Vosk commonly appends/trailing at utterance edges. They defeat the
+# strictly-anchored ($) rule regexes in intents/rules.py, which would otherwise
+# send clean-typed text to an intent but spoken text (e.g. "what time is it the")
+# to the LLM fallback. Stripping these makes voice route like typed text.
+_LEADING_FILLER = {
+    "um", "uh", "er", "ah", "oh", "ok", "okay", "please", "so", "like",
+    "hey", "texx", "computer", "assistant", "hi", "hello",
+}
+_TRAILING_FILLER = {
+    # Only words that are essentially never the *intended* final word of a
+    # command. Deliberately exclude real words like "is"/"it"/"of"/"to" — those
+    # legitimately end commands ("what time is it") and must not be stripped.
+    "the", "a", "an", "um", "uh", "er", "ah", "oh", "ok", "okay", "please",
+}
+
+
+def normalize_transcript(text: str) -> str:
+    """Cleanup for Vosk output so it routes like clean typed input.
+
+    - collapse repeated whitespace
+    - drop doubled filler tokens Vosk often repeats ("the the")
+    - strip filler words at the utterance edges
+    """
+    text = " ".join(text.split())
+    if not text:
+        return ""
+    toks = text.split()
+    # Drop consecutive duplicated *filler* tokens Vosk often repeats ("the the").
+    deduped: list[str] = []
+    for t in toks:
+        if deduped and t.lower() == deduped[-1].lower() and t.lower() in _TRAILING_FILLER:
+            continue
+        deduped.append(t)
+    # Strip filler from the edges (ignore trailing punctuation in the compare).
+    while deduped and deduped[-1].lower().strip(".,?!") in _TRAILING_FILLER:
+        deduped.pop()
+    while deduped and deduped[0].lower().strip(".,?!") in _LEADING_FILLER:
+        deduped.pop(0)
+    return " ".join(deduped)
+
 
 class VoiceController:
     """Push-to-talk orchestration (spec §8): record -> VAD -> STT -> handler -> TTS.
@@ -61,7 +101,8 @@ class VoiceController:
         audio = await loop.run_in_executor(None, self.recorder.record_until_silence)
         if not audio:
             return None
-        return await loop.run_in_executor(None, self.stt.transcribe, audio)
+        raw = await loop.run_in_executor(None, self.stt.transcribe, audio)
+        return normalize_transcript(raw) if raw else ""
 
     def begin_capture(self) -> bool:
         """Hold-to-talk start: open the mic and begin accumulating audio."""
@@ -78,7 +119,8 @@ class VoiceController:
         audio = await loop.run_in_executor(None, self.recorder.end)
         if not audio:
             return None
-        return await loop.run_in_executor(None, self.stt.transcribe, audio)
+        raw = await loop.run_in_executor(None, self.stt.transcribe, audio)
+        return normalize_transcript(raw) if raw else ""
 
     def speak(self, text: str) -> None:
         if not self.tts.is_available():
