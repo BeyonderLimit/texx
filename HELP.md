@@ -283,10 +283,14 @@ New apps are blocked by default for safety. Add them yourself:
 | `/allow close myapp myapp-process` | Allow closing by process name |
 | `/disallow open featherpad` | Fully remove `featherpad` from the open allowlist (custom entry **and** built-in default) |
 | `/disallow close myapp` | Fully remove `myapp` from the close allowlist |
+| `/disallow featherpad` | Drop `featherpad` from **both** the open and close allowlists |
 | `/apps` | See everything currently allowed (what `open`/`close` will actually act on) |
 
 The command after the name is optional — if omitted, Texx tries launching/closing by the app name itself.
 Custom entries persist in the database and merge with the built-in defaults. **`/disallow` truly removes an app**: it deletes your custom entry *and* blocks the built-in default, so the app disappears from `/apps` and `open`/`close` will be denied for it. `/allow` re-enables a previously disabled app. See `APPS.md` for the full reference.
+
+You can also use natural language (routed offline, never to the chat fallback):
+`allow open myapp myapp`, `disallow open myapp`, or `disallow myapp` (removes from both).
 
 ### Assistant identity
 | Say | Does |

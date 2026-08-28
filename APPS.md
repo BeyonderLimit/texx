@@ -133,6 +133,17 @@ a permission-denied message. This is the correct, expected behavior — a defaul
 - `… wasn't on the open/close allowlist.` — neither a custom entry nor a built-in
   default existed for that name, so there was nothing to do.
 
+### Bare `/disallow NAME` (no qualifier)
+
+`/disallow NAME` with no `open`/`close` keyword removes the app from **both** allowlists
+at once. This is the convenient form when you just want an app gone:
+
+```
+/disallow talkie.py     → drops "talkie.py" from open and close (if present in either)
+```
+
+The same applies to natural-language `disallow NAME` (see §11).
+
 ### Re-enabling
 
 Run `/allow` for the same name again. That clears the disabled flag and (re)adds your
@@ -227,6 +238,23 @@ and the built-in defaults always apply.
 | `/allow open firefox firefox` | Re-enabled, launched |
 | `close spotify` (default) | `pkill -f spotify` |
 | `/disallow close spotify` then `close spotify` | Refused |
+| `/disallow talkie.py` (bare) | Removed from **both** open and close lists |
+| `disallow open talkie.py` (natural language) | Routed offline to the disallow handler, not the chat fallback |
+
+### Natural-language forms (offline, deterministic)
+
+These are handled by the intent router and **never** fall through to the LLM/chat
+fallback:
+
+- `allow open NAME [COMMAND...]` → same as `/allow open NAME [COMMAND...]`
+- `allow close NAME [PROCESS]` → same as `/allow close NAME [PROCESS]`
+- `disallow open NAME` → same as `/disallow open NAME`
+- `disallow close NAME` → same as `/disallow close NAME`
+- `disallow NAME` (no qualifier) → removes `NAME` from both lists
+
+If you ever see the assistant answer a disallow/allow request with generic chat advice
+(e.g. suggesting edits to `~/.bashrc`), routing has regressed — it must stay on the
+deterministic `app.allow` / `app.disallow` intents.
 
 ---
 

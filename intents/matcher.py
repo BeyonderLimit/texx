@@ -4,6 +4,8 @@ from intents.rules import (
     match_brief,
     match_calculator,
     match_close_app,
+    match_disallow,
+    match_allow,
     match_date_query,
     match_days_until,
     match_goal_create,
@@ -77,9 +79,11 @@ class RuleMatcher:
     def match(self, text: str) -> Command | None:
         for matcher in (
             lambda t: match_rename(t, self.settings.get("assistant_name")),
-            match_help,
-            match_timer,
-            match_open_result,
+    match_help,
+    match_disallow,
+    match_allow,
+    match_timer,
+    match_open_result,
             match_read_result,
             match_time_query,
             match_date_query,

@@ -75,32 +75,45 @@ def _time_report(ctx) -> str:
 def _manage_allowlist(ctx, arg: str, add: bool) -> str:
     parts = arg.split()
     usage = "Usage: `/allow open NAME [COMMAND...]` or `/allow close NAME [PROCESS]`"
-    if len(parts) < 2:
+    if not parts:
         return usage
-    action, app_name = parts[0].lower(), " ".join(parts[1:2])
-    rest = parts[2:]
     system = ctx.system
-    if action == "open":
-        argv = rest if rest else [app_name]
-        if add:
+    if add:
+        if len(parts) < 2 or parts[0].lower() not in ("open", "close"):
+            return usage
+        action = parts[0].lower()
+        app_name = parts[1]
+        rest = parts[2:]
+        if action == "open":
+            argv = rest if rest else [app_name]
             system.add_open(app_name, argv)
             return f"'{app_name}' added to the open allowlist (launches `{' '.join(argv)}`)."
-        return (
-            f"'{app_name}' removed from the open allowlist."
-            if system.remove_open(app_name)
-            else f"'{app_name}' wasn't on the open allowlist."
-        )
-    if action == "close":
         process = rest[0] if rest else app_name
-        if add:
-            system.add_close(app_name, process)
-            return f"'{app_name}' added to the close allowlist (kills process `{process}`)."
-        return (
-            f"'{app_name}' removed from the close allowlist."
-            if system.remove_close(app_name)
-            else f"'{app_name}' wasn't on the close allowlist."
-        )
-    return usage
+        system.add_close(app_name, process)
+        return f"'{app_name}' added to the close allowlist (kills process `{process}`)."
+    # disallow
+    if parts[0].lower() in ("open", "close") and len(parts) >= 2:
+        action = parts[0].lower()
+        app_name = parts[1]
+        if action == "open":
+            removed = system.remove_open(app_name)
+            return (f"'{app_name}' removed from the open allowlist."
+                    if removed else f"'{app_name}' wasn't on the open allowlist.")
+        removed = system.remove_close(app_name)
+        return (f"'{app_name}' removed from the close allowlist."
+                if removed else f"'{app_name}' wasn't on the close allowlist.")
+    # no qualifier: remove from both allowlists
+    app_name = parts[0]
+    r_open = system.remove_open(app_name)
+    r_close = system.remove_close(app_name)
+    if r_open or r_close:
+        lists = []
+        if r_open:
+            lists.append("open")
+        if r_close:
+            lists.append("close")
+        return f"'{app_name}' removed from the {', '.join(lists)} allowlist."
+    return f"'{app_name}' wasn't on the open or close allowlist."
 
 
 async def handle(text: str, ctx) -> str:

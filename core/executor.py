@@ -664,6 +664,48 @@ async def article_read(command, ctx):
     return f"{url}\n\n{text[:3000]}"
 
 
+@register("app.allow")
+async def app_allow(command, ctx):
+    action = command.slots["action"]
+    name = command.slots["name"]
+    command_argv = command.slots.get("command") or []
+    system = ctx.system
+    if action == "close":
+        process = command_argv[0] if command_argv else name
+        system.add_close(name, process)
+        return f"'{name}' added to the close allowlist (kills process `{process}`)."
+    # action == "open" (also the default when no qualifier is given)
+    argv = command_argv if command_argv else [name]
+    system.add_open(name, argv)
+    return f"'{name}' added to the open allowlist (launches `{' '.join(argv)}`)."
+
+
+@register("app.disallow")
+async def app_disallow(command, ctx):
+    action = command.slots.get("action")
+    name = command.slots["name"]
+    system = ctx.system
+    if action == "close":
+        removed = system.remove_close(name)
+        return (f"'{name}' removed from the close allowlist."
+                if removed else f"'{name}' wasn't on the close allowlist.")
+    if action == "open":
+        removed = system.remove_open(name)
+        return (f"'{name}' removed from the open allowlist."
+                if removed else f"'{name}' wasn't on the open allowlist.")
+    # No qualifier: remove from both allowlists.
+    r_open = system.remove_open(name)
+    r_close = system.remove_close(name)
+    if r_open or r_close:
+        lists = []
+        if r_open:
+            lists.append("open")
+        if r_close:
+            lists.append("close")
+        return f"'{name}' removed from the {', '.join(lists)} allowlist."
+    return f"'{name}' wasn't on the open or close allowlist."
+
+
 @register("calendar.appointments")
 async def calendar_appointments(command, ctx):
     rows = [r for r in ctx.reminders.list_pending(category="event") if r["due_at"]]

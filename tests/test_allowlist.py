@@ -95,6 +95,38 @@ def test_disallow_unknown_reports_not_on_list(tmp_path):
     assert "wasn't on the open allowlist" in response
 
 
+def test_disallow_slash_bare_removes_from_both(tmp_path):
+    ctx, router, executor = make(tmp_path)
+    asyncio.run(_slash(ctx, "/allow open talkie.py talkie.py"))
+    asyncio.run(_slash(ctx, "/allow close talkie.py talkie.py"))
+    assert "talkie.py" in ctx.system.open_map()
+    assert "talkie.py" in ctx.system.close_map()
+    # `/disallow NAME` with no open/close qualifier drops it from both lists.
+    response = asyncio.run(_slash(ctx, "/disallow talkie.py"))
+    assert "removed from the open, close allowlist" in response
+    assert "talkie.py" not in ctx.system.open_map()
+    assert "talkie.py" not in ctx.system.close_map()
+
+
+def test_disallow_natural_language_routes_offline(tmp_path):
+    # Reproduces the bug: "disallow open talkie.py" used to fall through to the LLM.
+    ctx, router, executor = make(tmp_path)
+    asyncio.run(_slash(ctx, "/allow open talkie.py talkie.py"))
+    cmd, response = asyncio.run(ask(ctx, router, executor, "disallow open talkie.py"))
+    assert cmd.intent == "app.disallow"          # offline, not a fallback/LLM intent
+    assert cmd.source == "rule"
+    assert "removed" in response
+    assert "talkie.py" not in ctx.system.open_map()
+
+
+def test_allow_natural_language_routes_offline(tmp_path):
+    ctx, router, executor = make(tmp_path)
+    cmd, response = asyncio.run(ask(ctx, router, executor, "allow open myapp myapp"))
+    assert cmd.intent == "app.allow"
+    assert "added to the open allowlist" in response
+    assert "myapp" in ctx.system.open_map()
+
+
 async def _slash(ctx, text):
     from core import slash
     return await slash.handle(text, ctx)

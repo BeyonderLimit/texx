@@ -657,6 +657,55 @@ def match_close_app(text: str) -> Command | None:
     return None
 
 
+DISALLOW_RE = re.compile(
+    r"^(?:please\s+)?disallow\s+(open|close)\s+(?P<name>.+?)\s*$", re.IGNORECASE
+)
+DISALLOW_BARE_RE = re.compile(
+    r"^(?:please\s+)?disallow\s+(?P<name>.+?)\s*$", re.IGNORECASE
+)
+ALLOW_RE = re.compile(
+    r"^(?:please\s+)?allow\s+(open|close)\s+(?P<rest>.+?)\s*$", re.IGNORECASE
+)
+
+
+def match_disallow(text: str) -> Command | None:
+    s = text.strip()
+    m = DISALLOW_RE.match(s)
+    if m:
+        return Command(
+            intent="app.disallow",
+            slots={"action": m.group(1).lower(), "name": m.group("name").strip()},
+            confidence=0.95,
+        )
+    m = DISALLOW_BARE_RE.match(s)
+    if m:
+        # No open/close qualifier: drop the app from both allowlists.
+        return Command(
+            intent="app.disallow",
+            slots={"action": None, "name": m.group("name").strip()},
+            confidence=0.9,
+        )
+    return None
+
+
+def match_allow(text: str) -> Command | None:
+    s = text.strip()
+    m = ALLOW_RE.match(s)
+    if m:
+        rest = m.group("rest").strip()
+        parts = rest.split()
+        if not parts:
+            return None
+        name = parts[0]
+        command = parts[1:]
+        return Command(
+            intent="app.allow",
+            slots={"action": m.group(1).lower(), "name": name, "command": command},
+            confidence=0.95,
+        )
+    return None
+
+
 def match_rename(text: str, current_name: str) -> Command | None:
     stripped = text.strip()
     for pattern in RENAME_PATTERNS:
