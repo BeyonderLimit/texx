@@ -799,19 +799,22 @@ class Executor:
             response = f"Permission denied: {e}"
             if e.hint:
                 response += f"\n{e.hint}"
+            self._completed(command, response)
             return response
         fn = HANDLERS.get(command.intent)
         if fn is None:
             self.states.set(AssistantState.ERROR)
             log_error(f"no handler registered for intent '{command.intent}'")
-            return f"No handler for intent '{command.intent}'."
+            response = f"No handler for intent '{command.intent}'."
+            self._completed(command, response)
+            return response
         self.states.set(AssistantState.EXECUTING)
         self.bus.publish_sync(Event(EventType.COMMAND_EXECUTING, {"intent": command.intent}))
         try:
             response = await fn(command, self.ctx)
         except UnknownApplication as e:
             self.states.set(AssistantState.IDLE)
-            self._completed(command)
+            self._completed(command, f"I don't know how to open '{e}'.")
             return f"I don't know how to open '{e}'."
         except Exception as e:
             self.states.set(AssistantState.IDLE)
@@ -820,12 +823,14 @@ class Executor:
                 error=str(e), text=getattr(command.slots, "get", lambda k: None)("text"),
             )
             self.bus.publish_sync(Event(EventType.COMMAND_FAILED, {"intent": command.intent, "error": str(e)}))
-            return f"Something went wrong: {e}"
+            response = f"Something went wrong: {e}"
+            self._completed(command, response)
+            return response
         self.states.set(AssistantState.IDLE)
-        self._completed(command)
+        self._completed(command, response)
         return response
 
-    def _completed(self, command):
+    def _completed(self, command, response: str):
         self.bus.publish_sync(
-            Event(EventType.COMMAND_COMPLETED, {"intent": command.intent})
+            Event(EventType.COMMAND_COMPLETED, {"intent": command.intent, "response": response})
         )

@@ -12,6 +12,8 @@ from core.state import AssistantState, StateManager
 from services.notifier import BellNotifier, CompositeNotifier, ConsoleNotifier
 from services.settings import Settings
 from services.time import TimeService
+from services.sessionlog import SessionLogService
+from services.owner import OwnerProfile
 from storage.database import Database
 from ui.app import App
 from voice.ptt import VoiceController
@@ -56,6 +58,7 @@ class VoiceSession:
 
     async def _on_utterance(self, text: str) -> str:
         self.app.console.print(f"[dim]You (voice):[/] {text}")
+        self.executor.bus.publish_sync(Event(EventType.USER_INPUT_RECEIVED, {"text": text}))
         command = self.router.route(text)
         if command.source != "fallback":
             self.states.set(AssistantState.PROCESSING)
@@ -261,13 +264,37 @@ async def main() -> int:
     )
     executor.ctx.voice = voice
 
+    # Phase 7: session archive + OWNER profile. SessionLogService is attached
+    # manually (not via its own bus subscription) so a single handler logs both
+    # the raw turn and the short-term 'discussion' memory in one place.
+    sessionlog = SessionLogService(db)
+    owner = OwnerProfile()
+
+    def _on_user_input(event):
+        text = (event.data or {}).get("text", "")
+        if not text:
+            return
+        sessionlog.log_turn("user", text)
+        executor.ctx.memory.add_discussion(text, source="session", role="user")
+
+    def _on_command_done(event):
+        data = event.data or {}
+        resp = data.get("response", "")
+        if not resp:
+            return
+        sessionlog.log_turn("assistant", resp, intent=data.get("intent"))
+        executor.ctx.memory.add_discussion(resp, source="session", role="assistant")
+
+    bus.subscribe(EventType.USER_INPUT_RECEIVED, _on_user_input)
+    bus.subscribe(EventType.COMMAND_COMPLETED, _on_command_done)
+
     slash_ctx = SimpleNamespace(settings=settings, states=states, system=executor.ctx.system,
                                 reminders=executor.ctx.reminders, time=time_service,
                                 memory=executor.ctx.memory, tasks=executor.ctx.tasks,
                                 cache=executor.ctx.cache, web=executor.ctx.web,
                                 wiki=executor.ctx.wiki, files=executor.ctx.files,
                                 weather=executor.ctx.weather, llm=executor.ctx.llm,
-                                voice=voice)
+                                voice=voice, sessionlog=sessionlog, owner=owner)
 
     helper = Helper(
         executor.ctx.reminders,
@@ -277,6 +304,9 @@ async def main() -> int:
         alerter=BellNotifier(console=app.console),
         mode_fn=lambda: settings.get("mode", "normal"),
         interval=60,
+        memory=executor.ctx.memory,
+        owner=owner,
+        llm=executor.ctx.llm,
     )
     helper_task = asyncio.create_task(helper.run())
 
@@ -298,6 +328,10 @@ async def main() -> int:
             if text.lower() in {"exit", "quit", "goodbye"}:
                 break
 
+            # Publish for all inputs (text + slash) so the session archive and
+            # discussion memory capture everything; the subscriber logs the turn.
+            bus.publish_sync(Event(EventType.USER_INPUT_RECEIVED, {"text": text}))
+
             if slash.is_slash_command(text):
                 response = await slash.handle(text, slash_ctx)
                 if response == "__EXIT__":
@@ -309,7 +343,6 @@ async def main() -> int:
                 states.set(AssistantState.IDLE)
                 continue
 
-            bus.publish_sync(Event(EventType.USER_INPUT_RECEIVED, {"text": text}))
             states.set(AssistantState.PROCESSING)
             command = router.route(text)
             if command.source != "fallback":

@@ -16,11 +16,23 @@ class Database:
 
     def _migrate(self):
         self.conn.executescript(SCHEMA_PATH.read_text())
-        cols = {r[1] for r in self.conn.execute("PRAGMA table_info(reminders)")}
-        if "category" not in cols:
+        mcols = {r[1] for r in self.conn.execute("PRAGMA table_info(memories)")}
+        if "layer" not in mcols:
+            self.conn.execute(
+                "ALTER TABLE memories ADD COLUMN layer TEXT NOT NULL DEFAULT 'persistent'"
+            )
+        if "role" not in mcols:
+            self.conn.execute(
+                "ALTER TABLE memories ADD COLUMN role TEXT"
+            )
+        rcols = {r[1] for r in self.conn.execute("PRAGMA table_info(reminders)")}
+        if "category" not in rcols:
             self.conn.execute(
                 "ALTER TABLE reminders ADD COLUMN category TEXT DEFAULT 'event'"
             )
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_memories_layer ON memories(layer, created_at)"
+        )
         self.conn.commit()
 
     def execute(self, sql: str, params: tuple = ()):

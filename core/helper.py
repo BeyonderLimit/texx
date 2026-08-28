@@ -20,7 +20,8 @@ class Helper:
     """
 
     def __init__(self, reminders, bus: EventBus, event_notifier, goal_notifier,
-                 alerter=None, mode_fn=None, interval: float = 60.0, clock=None):
+                 alerter=None, mode_fn=None, interval: float = 60.0, clock=None,
+                 memory=None, owner=None, llm=None):
         self.reminders = reminders
         self.bus = bus
         self.event_notifier = event_notifier
@@ -29,6 +30,9 @@ class Helper:
         self.mode_fn = mode_fn or (lambda: MODE_NORMAL)
         self.interval = interval
         self.clock = clock or datetime.now
+        self.memory = memory
+        self.owner = owner
+        self.llm = llm
 
     async def run(self):
         while True:
@@ -44,6 +48,15 @@ class Helper:
 
         events = self.reminders.get_due(now, category="event")
         goals = self.reminders.get_due(now, category="goal")
+
+        # Phase 7 background maintenance: compact short-term memory and refresh
+        # the curated OWNER.md. Purely bookkeeping — never touches the request path.
+        if self.memory is not None:
+            self.memory.compact_discussion(now)
+            self.memory.prune_daily(now)
+            self.memory.summarize_yesterday_discussion(self.llm, now)
+        if self.owner is not None and self.memory is not None:
+            self.owner.maybe_regen(self.memory.persistent(), self.llm, now)
 
         for row in events:
             self._fire_event(row, mode)

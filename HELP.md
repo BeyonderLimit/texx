@@ -165,6 +165,9 @@ always-listening. It needs three local assets (all optional — Texx runs withou
 | `/piper set /path/to/voice.onnx` | Point Texx at a Piper voice (hot-reloads) |
 | `/tts <text>` | Speak text aloud to test the TTS voice (reports if unavailable or on error) |
 | `/log [N]` | Show the last N log entries — errors and query/network faults (default 40) |
+| `/sessions [query]` | Review the raw session archive; with a query, search turns and show nearby context |
+| `/owner` | Show the curated OWNER.md owner profile |
+| `/compact` | Compact short-term memory and refresh OWNER.md |
 
 While voice mode is on, the terminal switches to raw key mode: hold the **Space**
 bar and speak — recording stops the moment you release (detected via the gap in

@@ -15,7 +15,35 @@ CREATE TABLE IF NOT EXISTS memories (
     last_accessed_at TEXT,
     access_count INTEGER DEFAULT 0,
     expires_at TEXT,
-    source TEXT
+    source TEXT,
+    layer TEXT NOT NULL DEFAULT 'persistent',
+    role TEXT
+);
+
+-- prior wording and nearby context can be recovered without loading memory.
+CREATE TABLE IF NOT EXISTS sessions (
+    id INTEGER PRIMARY KEY,
+    started_at TEXT NOT NULL,
+    ended_at TEXT,
+    turn_count INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS session_turns (
+    id INTEGER PRIMARY KEY,
+    session_id INTEGER REFERENCES sessions(id) ON DELETE CASCADE,
+    seq INTEGER NOT NULL,
+    role TEXT NOT NULL,
+    intent TEXT,
+    content TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_session_turns_session ON session_turns(session_id);
+CREATE INDEX IF NOT EXISTS idx_session_turns_created ON session_turns(created_at);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS session_fts USING fts5(
+    content,
+    session_turn_id UNINDEXED
 );
 
 CREATE TABLE IF NOT EXISTS memory_entities (

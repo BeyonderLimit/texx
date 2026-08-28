@@ -59,3 +59,38 @@ def test_clear_and_exit_sentinels():
 def test_is_slash():
     assert slash.is_slash_command("/help")
     assert not slash.is_slash_command("help me open firefox")
+
+
+def test_sessions_owner_compact(tmp_path):
+    from services.memory import MemoryService
+    from services.sessionlog import SessionLogService
+    from services.owner import OwnerProfile
+
+    db_path = tmp_path / "texx-slash-phase7.db"
+    db = Database(str(db_path))
+    c = ctx(tmp_path)
+    c.memory = MemoryService(db)
+    c.sessionlog = SessionLogService(db)
+    c.owner = OwnerProfile(path=tmp_path / "OWNER.md")
+
+    # seed a session turn and a memory
+    c.sessionlog.start_session()
+    c.sessionlog.log_turn("user", "remind me to buy milk")
+    c.sessionlog.log_turn("assistant", "ok, milk reminder set")
+    c.memory.add("I prefer tea over coffee", category="PREFERENCE")
+
+    out = asyncio.run(slash.handle("/sessions", c))
+    assert "milk" in out
+
+    out = asyncio.run(slash.handle("/sessions milk", c))
+    assert "milk" in out
+
+    out = asyncio.run(slash.handle("/owner", c))
+    assert "not generated yet" in out or "OWNER" in out
+
+    out = asyncio.run(slash.handle("/compact", c))
+    assert "Compaction complete" in out
+    # after compact, OWNER.md should now exist
+    out = asyncio.run(slash.handle("/owner", c))
+    assert "OWNER" in out
+

@@ -33,6 +33,9 @@ SLASH_COMMANDS: dict[str, SlashCommand] = {
     "/piper": SlashCommand("/piper", "set PATH", "Point Texx at a Piper voice .onnx"),
     "/tts": SlashCommand("/tts", "[text]", "Speak text aloud (tests the TTS voice)"),
     "/log": SlashCommand("/log", "[N]", "Show recent log entries (errors/faults)"),
+    "/sessions": SlashCommand("/sessions", "[query]", "Review session log (raw archive); search turns with a query"),
+    "/owner": SlashCommand("/owner", "", "Show the curated OWNER.md owner profile"),
+    "/compact": SlashCommand("/compact", "", "Compact short-term memory and refresh OWNER.md"),
     "/tasks": SlashCommand("/tasks", "", "List open tasks"),
     "/mode": SlashCommand("/mode", "[normal|silent|dnd]", "Get or set notification mode"),
     "/brief": SlashCommand("/brief", "", "Show a summary of your day"),
@@ -274,6 +277,52 @@ async def handle(text: str, ctx) -> str:
         if not entries:
             return "No log entries yet."
         return "\n".join(entries)
+    if name == "/sessions":
+        sessionlog = getattr(ctx, "sessionlog", None)
+        if sessionlog is None:
+            return "Session logging is not available."
+        q = arg.strip()
+        if not q:
+            rows = sessionlog.recent(20)
+            if not rows:
+                return "No session turns recorded yet."
+            lines = ["Recent session turns:"]
+            for r in reversed(rows):
+                lines.append(f"[{r['created_at']}] {r['role']}: {r['content']}")
+            return "\n".join(lines)
+        matches = sessionlog.search(q, limit=5)
+        if not matches:
+            return f"No session turns matching '{q}'."
+        lines = [f"Session turns matching '{q}':"]
+        for m in matches:
+            lines.append(f"  match @ {m['created_at']} ({m['role']}): {m['content']}")
+            for nb in sessionlog.get_nearby(m["id"], window=2):
+                if nb["id"] == m["id"]:
+                    continue
+                lines.append(f"    [{nb['role']}] {nb['content']}")
+        return "\n".join(lines)
+    if name == "/owner":
+        owner = getattr(ctx, "owner", None)
+        if owner is None or not owner.exists():
+            return ("OWNER.md not generated yet. It builds automatically in the "
+                    "background (or after memory changes); run /compact to force it.")
+        return owner.read()
+    if name == "/compact":
+        memory = getattr(ctx, "memory", None)
+        owner = getattr(ctx, "owner", None)
+        if memory is None:
+            return "Memory service is not available."
+        d = memory.compact_discussion()
+        dy = memory.prune_daily()
+        if owner is not None:
+            memory_items = memory.persistent()
+            for _ in memory_items:
+                owner.mark_dirty()
+            owner.regen(memory_items, llm=getattr(ctx, "llm", None), force=True)
+            owner_msg = "OWNER.md refreshed."
+        else:
+            owner_msg = "OWNER.md skipped (no profile service)."
+        return f"Compaction complete: {d} discussion + {dy} daily entries pruned. {owner_msg}"
     if name == "/name":
         if arg:
             ctx.settings.set("assistant_name", arg)
