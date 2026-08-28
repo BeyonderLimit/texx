@@ -60,6 +60,41 @@ def test_defaults_survive_and_persist(tmp_path):
     assert fresh.open_map()["editor"] == ["gedit"]
 
 
+def test_disallow_removes_default_open_app(tmp_path):
+    ctx, _, _ = make(tmp_path)
+    asyncio.run(_slash(ctx, "/allow open firefox firefox --new-tab"))
+    assert "firefox" in ctx.system.open_map()
+    response = asyncio.run(_slash(ctx, "/disallow open firefox"))
+    assert "removed" in response
+    # The built-in default must actually be gone, not just the custom override.
+    assert "firefox" not in ctx.system.open_map()
+    # and survive a fresh service reading the same settings
+    assert "firefox" not in SystemService(ctx.settings).open_map()
+
+
+def test_disallow_then_reallow_default(tmp_path):
+    ctx, _, _ = make(tmp_path)
+    asyncio.run(_slash(ctx, "/disallow open firefox"))
+    assert "firefox" not in ctx.system.open_map()
+    asyncio.run(_slash(ctx, "/allow open firefox firefox"))
+    assert "firefox" in ctx.system.open_map()
+
+
+def test_disallow_close_default_app(tmp_path):
+    ctx, _, _ = make(tmp_path)
+    asyncio.run(_slash(ctx, "/allow close spotify spotify"))
+    assert "spotify" in ctx.system.close_map()
+    response = asyncio.run(_slash(ctx, "/disallow close spotify"))
+    assert "removed" in response
+    assert "spotify" not in ctx.system.close_map()
+
+
+def test_disallow_unknown_reports_not_on_list(tmp_path):
+    ctx, _, _ = make(tmp_path)
+    response = asyncio.run(_slash(ctx, "/disallow open doesnotexist"))
+    assert "wasn't on the open allowlist" in response
+
+
 async def _slash(ctx, text):
     from core import slash
     return await slash.handle(text, ctx)

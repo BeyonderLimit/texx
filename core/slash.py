@@ -88,7 +88,7 @@ def _manage_allowlist(ctx, arg: str, add: bool) -> str:
         return (
             f"'{app_name}' removed from the open allowlist."
             if system.remove_open(app_name)
-            else f"'{app_name}' wasn't on the custom open allowlist."
+            else f"'{app_name}' wasn't on the open allowlist."
         )
     if action == "close":
         process = rest[0] if rest else app_name
@@ -98,7 +98,7 @@ def _manage_allowlist(ctx, arg: str, add: bool) -> str:
         return (
             f"'{app_name}' removed from the close allowlist."
             if system.remove_close(app_name)
-            else f"'{app_name}' wasn't on the custom close allowlist."
+            else f"'{app_name}' wasn't on the close allowlist."
         )
     return usage
 
