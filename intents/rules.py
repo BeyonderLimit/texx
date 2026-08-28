@@ -18,10 +18,13 @@ SET_NAME_QUERY = re.compile(r"^(?:what(?:'s| is) your name\??|who are you\??)$",
 HELP_PATTERN = re.compile(r"^(?:help|what can you do\??|commands\??|capabilities\??|\?)$", re.IGNORECASE)
 
 TIME_QUERY = re.compile(
-    r"^(?:what(?:'s| is)?\s+(?:the\s+|a\s+)?(?:current\s+)?time"
+    r"^(?:"
+    r"what(?:'s| is)?\s+(?:the\s+|a\s+)?(?:current\s+)?time"
     r"(?:\s+(?:right\s+now|now|today))?"
     r"|what\s+time\s+is\s+it"
+    r"(?:\s+(?:right\s+now|now|today))?"
     r"|tell\s+me\s+(?:the\s+)?(?:current\s+)?time"
+    r"(?:\s+(?:right\s+now|now|today))?"
     r"|time(?:\s+please)?"
     r")\??$",
     re.IGNORECASE,
