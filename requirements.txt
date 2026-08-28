@@ -6,6 +6,9 @@ llama-cpp-python>=0.3.0
 # Optional: voice (Phase 6). Texx runs fully without these. For voice you also
 # need model files (a Vosk model dir and a Piper .onnx voice) supplied by the user.
 vosk>=0.3.45
+# sounddevice is a Python binding to the system PortAudio library — you must
+# ALSO install the system package `libportaudio2`, or `import sounddevice`
+# raises "PortAudio library not found" (mic-probe.sh installs it automatically).
 sounddevice>=0.4.0
 piper-tts>=1.5.0
 
