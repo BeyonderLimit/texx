@@ -294,7 +294,8 @@ async def main() -> int:
                                 cache=executor.ctx.cache, web=executor.ctx.web,
                                 wiki=executor.ctx.wiki, files=executor.ctx.files,
                                 weather=executor.ctx.weather, llm=executor.ctx.llm,
-                                voice=voice, sessionlog=sessionlog, owner=owner)
+                                voice=voice, sessionlog=sessionlog, owner=owner,
+                                results=executor.ctx.results)
 
     helper = Helper(
         executor.ctx.reminders,

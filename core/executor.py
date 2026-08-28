@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from types import SimpleNamespace
 
 from core.events import Event, EventBus, EventType
 from core.permissions import PermissionDenied, check
@@ -157,8 +158,10 @@ class ExecutorContext:
         self.weather = weather if weather is not None else WeatherProvider()
         self.llm = llm
         self.voice = voice
-        self.last_file_results: list = []
-        self.last_web_results: list = []
+        # Shared, mutable result store. Both the natural-language executor ctx and
+        # the slash-command ctx point at the SAME object so e.g. `/find` results are
+        # visible to a later natural-language `open result N` (and vice versa).
+        self.results = SimpleNamespace(last_file_results=[], last_web_results=[])
         self._chat_history: list = []
 
 
@@ -573,7 +576,7 @@ async def web_search(command, ctx):
         ctx.cache.set(key, results, ttl_seconds=3600)
     else:
         cached_note = " (cached)"
-    ctx.last_web_results = [r["url"] for r in results]
+    ctx.results.last_web_results = [r["url"] for r in results]
     lines = [f"Results for '{query}'{cached_note}:", ""]
     for i, r in enumerate(results, 1):
         snippet = (r.get("snippet") or "")[:140]
@@ -609,7 +612,7 @@ async def knowledge_wiki(command, ctx):
 async def file_find(command, ctx):
     query = command.slots["query"]
     matches = ctx.files.find(query)
-    ctx.last_file_results = matches
+    ctx.results.last_file_results = matches
     if not matches:
         return f"No local files matching '{query}'."
     lines = [f"{len(matches)} local match(es) for '{query}':"]
@@ -624,13 +627,14 @@ async def file_find(command, ctx):
 async def file_open_result(command, ctx):
     n = command.slots["n"]
     from services.system import launch_detached
-    if ctx.last_file_results:
-        if not 1 <= n <= len(ctx.last_file_results):
-            return f"Result {n} doesn't exist ({len(ctx.last_file_results)} matches). Try 'find' again."
-        path = ctx.last_file_results[n - 1]
+    file_results = ctx.results.last_file_results
+    if file_results:
+        if not 1 <= n <= len(file_results):
+            return f"Result {n} doesn't exist ({len(file_results)} matches). Try 'find' again."
+        path = file_results[n - 1]
         launch_detached(["xdg-open", str(path)])
         return f"Opening {path.name}."
-    urls = getattr(ctx, "last_web_results", [])
+    urls = ctx.results.last_web_results
     if urls:
         if not 1 <= n <= len(urls):
             return f"Result {n} doesn't exist ({len(urls)} matches). Try 'search' again."
@@ -643,7 +647,7 @@ async def file_open_result(command, ctx):
 @register("article.read")
 async def article_read(command, ctx):
     n = command.slots["n"]
-    urls = getattr(ctx, "last_web_results", [])
+    urls = ctx.results.last_web_results
     if not urls:
         return "No search results to read — use 'search for <query>' first."
     if not 1 <= n <= len(urls):

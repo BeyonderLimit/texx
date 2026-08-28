@@ -52,14 +52,14 @@ class TestReadResultHandler:
 
     def test_out_of_range(self, tmp_path):
         ctx, router, executor = make(tmp_path)
-        ctx.last_web_results = ["https://a.com"]
+        ctx.results.last_web_results = ["https://a.com"]
         _, response = asyncio.run(ask(ctx, router, executor, "read result 5"))
         assert "5" in response
         assert "doesn't exist" in response
 
     def test_fetches_article_text(self, tmp_path):
         ctx, router, executor = make(tmp_path)
-        ctx.last_web_results = ["https://example.com/article"]
+        ctx.results.last_web_results = ["https://example.com/article"]
         fetched = {}
         executor.ctx.web = SimpleNamespace(
             fetch_page_text=lambda url, max_chars=4000: (
@@ -72,7 +72,7 @@ class TestReadResultHandler:
 
     def test_network_error(self, tmp_path):
         ctx, router, executor = make(tmp_path)
-        ctx.last_web_results = ["https://offline.com"]
+        ctx.results.last_web_results = ["https://offline.com"]
         executor.ctx.web = SimpleNamespace(
             fetch_page_text=lambda url, max_chars=4000: (_ for _ in ()).throw(
                 OnlineError("network down")))
@@ -81,7 +81,7 @@ class TestReadResultHandler:
 
     def test_empty_text(self, tmp_path):
         ctx, router, executor = make(tmp_path)
-        ctx.last_web_results = ["https://blank.com"]
+        ctx.results.last_web_results = ["https://blank.com"]
         executor.ctx.web = SimpleNamespace(
             fetch_page_text=lambda url, max_chars=4000: "")
         _, response = asyncio.run(ask(ctx, router, executor, "read result 1"))

@@ -225,3 +225,42 @@ def test_routing_matrix(tmp_path, text, intent):
     ctx, router, _ = make(tmp_path)
     command = router.route(text)
     assert command.intent == intent, text
+
+
+def test_find_slash_then_open_result_nl_shares_results(tmp_path, monkeypatch):
+    # Regression: `/find` (slash) used to store results on a different context
+    # than `open result N` (natural language), so opening failed with
+    # "Nothing to open yet". The shared results holder fixes that.
+    docs = tmp_path / "Documents"
+    docs.mkdir()
+    (docs / "resume_final.pdf").write_text("x")
+    (docs / "recipes.txt").write_text("x")
+    from services.files import FileSearchService
+    svc = FileSearchService(home=tmp_path)
+
+    ctx, router, executor = make(tmp_path)
+    executor.ctx.files = svc
+    from core.executor import file_find, file_open_result
+
+    # slash_ctx shares the SAME results holder as executor.ctx
+    slash_ctx = SimpleNamespace(files=svc, results=executor.ctx.results)
+    asyncio.run(file_find(Command(intent="file.find", slots={"query": "resume"}), slash_ctx))
+
+    opened = {}
+    import subprocess
+    orig = subprocess.Popen
+
+    def fake_popen(*args, **kwargs):
+        opened["argv"] = args[0]
+        class R:
+            pass
+        return R()
+
+    subprocess.Popen = fake_popen
+    try:
+        response = asyncio.run(file_open_result(
+            Command(intent="file.open_result", slots={"n": 1}), executor.ctx))
+        assert "Opening" in response
+        assert "resume" in opened["argv"][1]
+    finally:
+        subprocess.Popen = orig
