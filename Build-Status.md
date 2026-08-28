@@ -328,6 +328,76 @@ lazy-imported so Texx runs identically without them; model files are user-suppli
 
 ---
 
+## Phase 7 — Memory layering, OWNER profile & session archive (planned)
+
+Design goal (from the memory-layer audit): add tiered memory (persistent / daily /
+discussion), a curated `OWNER.md` profile, a searchable raw session-log archive, and
+time-based compaction — **without adding latency to the deterministic path**.
+
+Current `services/memory.py` is a single flat FTS5 store (categories
+PROFILE/PREFERENCE/PROJECT/PEOPLE/FACT); explicit `remember` and LLM auto-extraction
+already land there. Gaps vs. target: no layer tiers, no `OWNER.md`, no session logs,
+no short-term compaction/cleanup.
+
+### Design principles (snappy guardrails)
+- **Deterministic path stays pure.** No memory fetch or LLM call on non-LLM intents
+  (`timer.start`, `weather.query`, etc. must not read memory).
+- **All LLM-heavy work is background.** Daily summarization, OWNER regen, and any
+  auto-extraction beyond `conversation.chat` run in the existing 60s `Helper` loop,
+  never per deterministic turn.
+- **Writes are cheap appends; retrieval is bounded** (top-K + recency window) so FTS
+  stays fast and prompts don't bloat.
+
+### Schema (storage/schema.sql + idempotent migration)
+- `memories`: add `layer TEXT NOT NULL DEFAULT 'persistent'`
+  (persistent | daily | discussion); index `(layer, created_at)`.
+- New `session_turns` (id, session_id, seq, role, intent, content, created_at) with
+  FTS5 `session_fts(content)` + insert/delete triggers. Optional `sessions`
+  (id, started_at, ended_at, turn_count) for grouping.
+- `memory_fts` unchanged; `MemoryService.search()` gains an optional `layers=` filter.
+
+### Modules
+- `services/memory.py`: `add()` takes `layer` (default persistent); `add_daily` /
+  `add_discussion` helpers; `compact_discussion(older_than)` (fold/delete >7d),
+  `prune_daily(older_than)` (>90d), `search(layers=...)` bounded.
+- `services/sessionlog.py` (new): `SessionLogService` — `start_session`,
+  `log_turn(role, intent, content)`, `end_session`, `search(q, limit)` over
+  `session_fts`. Subscribes to `EventBus` (`USER_INPUT_RECEIVED`, `INTENT_MATCHED`,
+  `COMMAND_COMPLETED`) so logging is fire-and-forget, off the response path.
+- `services/owner.py` (new): `OwnerProfile` — reads/writes `OWNER.md`;
+  `regen_from_memories()` builds a curated profile via LLM, **debounced** (every ~10
+  min or every N writes) in the background.
+- `core/executor.py`: wire `SessionLogService` as an event subscriber (no change to the
+  request flow). Keep `_maybe_store_memories` chat-only. When the LLM is used, build
+  prompt context from top-K persistent + recent discussion + `OWNER.md` (bounded).
+- `core/helper.py`: extend the 60s loop with: summarize prior day's discussion →
+  daily (LLM), compact old discussion, prune stale daily, debounced OWNER regen.
+- `intents/rules.py` + `core/slash.py` + `HELP.md`: `/sessions [query]` (review/search
+  session logs — recovers exact wording + nearby context), `/owner` (print OWNER.md),
+  `/memory compact` (manual trigger).
+
+### Tests
+- `tests/test_memory_layers.py`: layer routing (remember→persistent; daily/discussion
+  insert), `search(layers=)` filtering, compaction deletes old rows, prune.
+- `tests/test_sessionlog.py`: turn logging via bus events; FTS search recovers exact
+  turn + neighbours; retention pruning.
+- `tests/test_owner.py`: regen builds a curated (non-raw) summary; debounce respected.
+- Regression: `test_memory.py`, `test_search.py`, `test_log.py`, `test_voice.py` stay
+  green; default `search()` behavior unchanged for persistent.
+
+### Performance budget
+- Session log = 1 sub-ms `INSERT`/turn via bus subscriber; no `await` added to the response.
+- Daily/discussion writes happen only in the background loop.
+- OWNER regen debounced; reading `OWNER.md` is a file read, only when building an LLM prompt.
+- Net per-interaction cost: one extra append + background CPU for summarization.
+  Deterministic-first latency unchanged.
+
+### Version
+- `pyproject.toml` 1.0.0 → **1.1.0** (backward-compatible: additive tables via idempotent
+  migration, new optional commands).
+
+---
+
 ## Roadmap
 
 | Phase | Scope | Status |
@@ -340,6 +410,7 @@ lazy-imported so Texx runs identically without them; model files are user-suppli
 | 4 | Knowledge: ✅ web search + Wikipedia + caching + local file search + weather + calendar import + article extraction | ✅ Done |
 | 5 | Local LLM integration: ✅ optional `llama-cpp-python` layer, conversation.chat, auto memory extraction, /llm command | ✅ Done |
 | 6 | Voice: ✅ Vosk STT + Piper TTS + EnergyVAD + sounddevice recorder + PTT loop, /voice /vosk /piper | ✅ Done |
+| 7 | Memory layering (persistent/daily/discussion), OWNER.md profile, searchable session-log archive, time-based compaction — non-latency-preserving design | Planned (design complete) |
 
 ---
 

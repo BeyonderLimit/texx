@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "texx"
-version = "1.0.0"
+version = "1.1.0"
 description = "Offline-first deterministic personal assistant for Linux with a Rich TUI."
 readme = "README.md"
 requires-python = ">=3.11"
