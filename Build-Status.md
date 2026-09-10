@@ -484,6 +484,9 @@ commands — a real hurdle for non-technical users, and the `/voice` error messa
 
 Functions added: none in Python (messages only); new script `voice-config.sh`.
 
+### Version
+- `pyproject.toml` 1.1.0 → **1.1.1** (patch: performance pass + setup tooling; fully backward-compatible).
+
 ---
 
 ## Roadmap
