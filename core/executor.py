@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 
@@ -341,14 +342,15 @@ def _weather_key(ctx) -> str:
     return f"weather:{loc or '_auto'}"
 
 
-def _load_weather(ctx):
+async def _load_weather(ctx):
     """Shared weather lookup for handlers and the briefing.
-    Returns (data, from_cache)."""
+    Returns (data, from_cache). Blocks only on a cache miss; the network fetch
+    runs in a worker thread so a slow wttr.in call never stalls the loop."""
     key = _weather_key(ctx)
     data = ctx.cache.get(key)
     if data is None:
         loc = (ctx.settings.get("location") or "").strip() or None
-        data = ctx.weather.current(loc)
+        data = await asyncio.to_thread(ctx.weather.current, loc)
         ctx.cache.set(key, data, ttl_seconds=WEATHER_TTL_SECONDS)
         return data, False
     return data, True
@@ -395,7 +397,7 @@ def _answer_condition(condition: str, entry: dict) -> str:
 @register("weather.query")
 async def weather_query(command, ctx):
     try:
-        data, from_cache = _load_weather(ctx)
+        data, from_cache = await _load_weather(ctx)
     except OnlineError as e:
         log_fault("weather lookup failed", error=str(e))
         return f"Weather unavailable: {e}."
@@ -569,7 +571,7 @@ async def web_search(command, ctx):
     cached_note = ""
     if results is None:
         try:
-            results = ctx.web.search(query)
+            results = await asyncio.to_thread(ctx.web.search, query)
         except OnlineError as e:
             log_fault("web search failed", query=query, error=str(e))
             return f"Web search unavailable: {e}."
@@ -596,7 +598,7 @@ async def knowledge_wiki(command, ctx):
     data = ctx.cache.get(key)
     if data is None:
         try:
-            data = ctx.wiki.summary(topic)
+            data = await asyncio.to_thread(ctx.wiki.summary, topic)
         except OnlineError as e:
             log_fault("wikipedia lookup failed", topic=topic, error=str(e))
             return f"Wikipedia unavailable: {e}."
@@ -654,7 +656,7 @@ async def article_read(command, ctx):
         return f"Result {n} doesn't exist ({len(urls)} results). Try 'search' again."
     url = urls[n - 1]
     try:
-        text = ctx.web.fetch_page_text(url)
+        text = await asyncio.to_thread(ctx.web.fetch_page_text, url)
     except OnlineError as e:
         log_fault("article fetch failed", url=url, error=str(e))
         return f"Could not fetch the article: {e}."

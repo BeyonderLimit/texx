@@ -53,20 +53,21 @@ class SessionLogService:
         self._ensure_session()
         self._seq += 1
         now = _iso(datetime.now())
-        cur = self.db.execute(
-            "INSERT INTO session_turns (session_id, seq, role, intent, content, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (self._session_id, self._seq, role, intent, content, now),
-        )
-        tid = cur.lastrowid
-        self.db.execute(
-            "INSERT INTO session_fts (content, session_turn_id) VALUES (?, ?)",
-            (content, tid),
-        )
-        self.db.execute(
-            "UPDATE sessions SET turn_count = turn_count + 1 WHERE id = ?",
-            (self._session_id,),
-        )
+        with self.db.transaction():
+            cur = self.db.execute(
+                "INSERT INTO session_turns (session_id, seq, role, intent, content, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (self._session_id, self._seq, role, intent, content, now),
+            )
+            tid = cur.lastrowid
+            self.db.execute(
+                "INSERT INTO session_fts (content, session_turn_id) VALUES (?, ?)",
+                (content, tid),
+            )
+            self.db.execute(
+                "UPDATE sessions SET turn_count = turn_count + 1 WHERE id = ?",
+                (self._session_id,),
+            )
         return tid
 
     def end_session(self):
