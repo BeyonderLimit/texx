@@ -63,15 +63,17 @@ Slash commands of interest: `/status`, `/reminders`, `/goals`, `/memories`,
 ### Enabling the optional layers
 
 - **Local LLM:** `/llm set /path/to/model.gguf` then talk normally.
-- **Voice:** download a [Vosk](https://alphacephei.com/vosk/models) model
-  directory and a [Piper](https://github.com/rhasspy/piper) `.onnx` voice,
-  then `/vosk set /path/to/vosk-model` and
-  `/piper set /path/to/voice.onnx`. Pick a non-default mic with
-  `/voice device`.
-- **Default mic:** Texx uses the system default input. To use a Bluetooth
-  headset or another input, set the `mic_device` setting (by index or name,
-  e.g. via the database or a future `/voice device` selector) — the recorder
-  reads `settings.get("mic_device")` at startup.
+- **Voice (easy):** run `./voice-config.sh` — it installs the libraries and
+  system audio packages, downloads a Vosk model + Piper voice, and configures
+  Texx's settings. Then `/voice on`.
+- **Voice (by hand):** download a [Vosk](https://alphacephei.com/vosk/models)
+  model directory and a [Piper](https://github.com/rhasspy/piper) `.onnx`
+  voice, then `/vosk set /path/to/vosk-model` and
+  `/piper set /path/to/voice.onnx`.
+- **Default mic:** Texx uses the system default input (see `mic-probe.sh` to
+  pick one). To use a Bluetooth headset or another input, set the `mic_device`
+  setting (by index or name) — the recorder reads `settings.get("mic_device")`
+  at startup.
 
 ## Project layout
 

@@ -155,6 +155,11 @@ always-listening. It needs three local assets (all optional — Texx runs withou
 - `sounddevice` + a microphone (capture)
 - `piper-tts` + a Piper `.onnx` voice (speech synthesis)
 
+**Easiest setup:** run `./voice-config.sh` from the Texx folder. It installs
+the libraries + system audio packages, downloads the speech models, and writes
+Texx's settings for you — then just `/voice on`. Everything below the line is
+for doing it by hand.
+
 | Say | Does |
 |---|---|
 | `/voice` | Voice status (which pieces are present) |

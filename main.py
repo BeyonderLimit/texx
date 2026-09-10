@@ -190,8 +190,10 @@ class VoiceSession:
         if self.active:
             return "Voice mode already on."
         if not self.ctrl.is_available():
-            return (f"Can't start voice ({self.ctrl.unavailable_reason()}). "
-                    "Install vosk + a model and sounddevice, then re-run Texx.")
+            return (f"Can't start voice — {self.ctrl.unavailable_reason()}.\n"
+                    "Run `./voice-config.sh` in the Texx folder to install the "
+                    "mic and speech models automatically, or check `/voice` for "
+                    "exactly what's missing.")
         self._running = True
         self.active = True
         self.task = asyncio.create_task(self._ptt_loop())
@@ -210,8 +212,13 @@ class VoiceSession:
         if self.active:
             return f"Voice mode ACTIVE — {comps}. Hold Space to talk, Esc to exit."
         if not self.ctrl.is_available():
-            return (f"Voice not startable — {comps}. "
-                    "Need Mic + Vosk loaded; set them with /voice set <path>.")
+            return (f"Voice isn't ready yet — {comps}.\n"
+                    "Those are the pieces that turn your words into text (Mic, "
+                    "Vosk) and your replies into speech (Piper). The fast fix: "
+                    "run `./voice-config.sh` in the Texx folder — it installs the "
+                    "audio libraries, downloads the models and configures "
+                    "everything for you. Then `/voice on` will just work. "
+                    "(Prefer doing it by hand? Use `/voice set <path>` for each.)")
         return f"Voice ready — {comps}. Use /voice on (hold Space to talk)."
 
     def set_vosk(self, path: str) -> str:
@@ -274,16 +281,18 @@ async def main() -> int:
         text = (event.data or {}).get("text", "")
         if not text:
             return
-        sessionlog.log_turn("user", text)
-        executor.ctx.memory.add_discussion(text, source="session", role="user")
+        with db.transaction():
+            sessionlog.log_turn("user", text)
+            executor.ctx.memory.add_discussion(text, source="session", role="user")
 
     def _on_command_done(event):
         data = event.data or {}
         resp = data.get("response", "")
         if not resp:
             return
-        sessionlog.log_turn("assistant", resp, intent=data.get("intent"))
-        executor.ctx.memory.add_discussion(resp, source="session", role="assistant")
+        with db.transaction():
+            sessionlog.log_turn("assistant", resp, intent=data.get("intent"))
+            executor.ctx.memory.add_discussion(resp, source="session", role="assistant")
 
     bus.subscribe(EventType.USER_INPUT_RECEIVED, _on_user_input)
     bus.subscribe(EventType.COMMAND_COMPLETED, _on_command_done)

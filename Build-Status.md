@@ -12,8 +12,8 @@ Core principle: **LLM understands and talks. Deterministic code decides and acts
 | Item | State |
 |---|---|
 | Current phase | **Phase 6 — Voice** (integration complete; backends optional) |
-| Latest build | Build 18 |
-| Tests | 159 passed |
+| Latest build | Build 20 (voice-config.sh + friendlier setup) |
+| Tests | 223 passed |
 | LLM | Not installed (by design until Phase 5) |
 | Voice | Optional layer complete (needs Vosk model + Piper voice + mic at runtime) | ✅ Done |
 
@@ -397,6 +397,92 @@ no short-term compaction/cleanup.
 ### Version
 - `pyproject.toml` 1.0.0 → **1.1.0** (backward-compatible: additive tables via idempotent
   migration, new optional commands).
+
+---
+
+## Build 19 — Deterministic-path performance pass
+
+Status: COMPLETE (validated end-to-end; ~1.6s wall for a full scripted session incl. real network)
+
+Two low-risk throughput upgrades on the hot path, aimed at the low-grade flash/storage
+profile of the target device. No behavioral change to any intent or reply text.
+
+- [x] **Storage (write path `storage/database.py`, `services/sessionlog.py`, `main.py`)**:
+  - `Database` now sets `PRAGMA journal_mode=WAL`, `synchronous=NORMAL`,
+    `cache_size=-16384` (16 MiB), `temp_store=MEMORY` before migrations. WAL turns
+    the per-write fsync into a buffered log append that checkpoints in bulk — the
+    bigperf win on SD/eMMC. Power-loss risk is limited to the most recent writes
+    (no corruption), which is fine for a local assistant DB.
+  - New `Database.transaction()` context manager: nests are flattened (outermost
+    commits / rolls back the whole group on exception; outer rollback leaks nothing).
+  - `SessionLogService.log_turn` wraps its 3 writes (session_turns + session_fts +
+    sessions counter) in one transaction: **3 commits/turn → 1**.
+  - `main.py`'s bus subscribers fold `log_turn` + `discussion` memory append into a
+    single transaction: **4 commits/user turn → 1** (measured with a counting
+    connection: 1 vs 4).
+- [x] **Liveness (non-blocking network `core/executor.py`)**:
+  - `_load_weather`, `web.search`, `knowledge.wiki`, and `article.read` now run their
+    blocking HTTP fetch inside `asyncio.to_thread(...)`. Previously a slow up-to-8s
+    fetch (search timeout) froze the entire loop — reminders/timers/PTT/typing all
+    stalled while the fetch ran.
+  - Measured: a 2 s timer now fires at 0.20 s **during** a 0.60 s fake-slow fetch
+    (timer delay would have been ~0.4 s pre-fix). `OnlineError` still propagates
+    through the thread and is caught as before.
+- [x] **Validation in the sandbox** (temp `HOME`, real network): cold entry-point
+  session with calculator, remember/recall, live weather, live DDG search, `/status`
+  (238-proc scan), `/sessions`, `/compact`, `/owner` completed in **1.6 s wall**;
+  session log captured every turn incl. slash commands; WAL sidecars present on DB;
+  `PRAGMA synchronous` reads NORMAL (1) on the app connection (synchronous is
+  per-connection; journal_mode persists in the DB header, so unrelated third-party
+  connections see the SQLite default FULL=2). Full suite: **215 passed** (1.96s), unaffected.
+- [x] `tests/test_database.py` coverage for `transaction()` batching + rollback
+  (batching path also exercised by `tests/test_sessionlog.py`, `tests/test_log.py`).
+
+Functions added: `Database.transaction`, `Database._optimize` (WAL/etc.); handlers
+`weather.query` / `web.search` / `knowledge.wiki` / `article.read` unchanged but now
+thread-offload their network I/O.
+
+---
+
+## Build 20 — One-shot voice setup (`voice-config.sh`)
+
+Status: COMPLETE
+
+Prior to this build, enabling voice meant installing `sounddevice`+`libportaudio2`,
+finding a Vosk model + Piper voice, and knowing `/voice set|/vosk|/piper` slash
+commands — a real hurdle for non-technical users, and the `/voice` error message
+("Need Mic + Vosk loaded; set them with /voice set <path>") didn't help.
+
+- [x] `voice-config.sh` — idempotent, step-by-step (each step confirmable, `-y` to
+  accept all):
+  1. Installs Python voice libs into a uv- or `python3 -m venv`-created `.venv`
+     from `requirements.txt`
+  2. Installs system audio packages (`libportaudio2`, `alsa-utils`) via sudo
+  3. Runs `mic-probe.sh` for driver install + default-source selection + 10s test
+     recording
+  4. Downloads a small Vosk model (alphacephei) and a Piper voice
+     (rhasspy/piper-voices `en_US-lessac-medium`) into
+     `~/.local/share/texx/models/` (~110 MB; URLs overridable via
+     `--vosk-url`/`--piper-onnx`/`--piper-config`)
+  5. Writes `vosk_model_path` / `piper_voice_path` settings via Texx's own
+     `Database`+`Settings` (falls back to a direct `settings` INSERT if deps are
+     missing), then prints plain-language next steps (`/voice on`)
+- [x] `requirements.txt` — added `uv` + `pip` as (harmless) tooling deps so the
+  setup scripts find a working venv/installer even without OS packages.
+  `sounddevice` was already listed.
+- [x] Friendlier in-app guidance: `VoiceSession.status()` / `start()`
+  (`main.py`) and the `/voice on` handler (`core/slash.py`) now explain in plain
+  language which pieces are missing and point at `./voice-config.sh`.
+- [x] Docs: HELP.md voice intro + README "Enabling the optional layers" now lead
+  with the easy path.
+- [x] 5 new tests (`tests/test_voice.py`): slash `/voice on` guidance + the
+  `VoiceSession.status()/start()` messages — the suite is now **223 passed**.
+- [x] Validated in the sandbox: `--help` renders cleanly; settings-write step
+  exercised both the app-layer path (via `.venv`) and the raw-sqlite3 fallback;
+  all three model URLs reachable (HTTP 200); entry-point `/voice` + `/voice on`
+  now show the friendly panels. Full suite plus entry-point smoke pass.
+
+Functions added: none in Python (messages only); new script `voice-config.sh`.
 
 ---
 

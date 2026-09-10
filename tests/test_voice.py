@@ -122,6 +122,46 @@ class TestVoiceSlash:
         out = asyncio.run(handle("/voice on", ctx))
         assert "on" in out.lower()
 
+    def test_slash_voice_on_unavailable_points_to_script(self):
+        from core.slash import handle
+        fake_voice = SimpleNamespace(
+            ctrl=SimpleNamespace(is_available=lambda: False,
+                                 unavailable_reason=lambda: "vosk not installed"),
+            task=None, status=lambda: "x", start=lambda: "on", stop=lambda: "off")
+        ctx = SimpleNamespace(voice=fake_voice)
+        out = asyncio.run(handle("/voice on", ctx))
+        assert "voice-config.sh" in out
+
+
+class TestVoiceSessionHelpfulMessages:
+    """Non-technical users get pointed at ./voice-config.sh when voice can't start."""
+
+    class UnavailableCtrl:
+        def is_available(self):
+            return False
+
+        def unavailable_reason(self):
+            return "Vosk: no model path configured"
+
+        def component_status(self):
+            return "Mic: loaded · Vosk: no model path configured · Piper: no voice path configured"
+
+    def test_status_lists_pieces_and_points_to_script(self):
+        from main import VoiceSession
+        vs = VoiceSession(None, None, None, None, None)
+        vs.ctrl = self.UnavailableCtrl()
+        out = vs.status()
+        assert "no model path configured" in out
+        assert "voice-config.sh" in out
+        assert "/voice set" in out
+
+    def test_start_unavailable_points_to_script(self):
+        from main import VoiceSession
+        vs = VoiceSession(None, None, None, None, None)
+        vs.ctrl = self.UnavailableCtrl()
+        out = vs.start()
+        assert "voice-config.sh" in out
+
 
 class TestModelSlash:
     def test_vosk_set_updates_path(self):

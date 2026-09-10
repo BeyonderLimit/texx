@@ -11,4 +11,9 @@ vosk>=0.3.45
 # raises "PortAudio library not found" (mic-probe.sh installs it automatically).
 sounddevice>=0.4.0
 piper-tts>=1.5.0
+# Bootstrapping tooling used by setup.sh / voice-config.sh. Installed as plain
+# packages so the scripts can find a working uv/pip even without OS packages
+# (they read `~/.local/bin` too). Harmless: both are just command-line tools.
+uv>=0.5
+pip>=24
 

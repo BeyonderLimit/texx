@@ -244,7 +244,8 @@ async def handle(text: str, ctx) -> str:
         if arg in ("on", "start"):
             if not voice.ctrl.is_available():
                 return (f"Can't start voice ({voice.ctrl.unavailable_reason()}). "
-                        "Install vosk + a model and sounddevice, then re-run Texx.")
+                        "Run ./voice-config.sh to install the mic and speech "
+                        "models automatically, or see /voice for what's missing.")
             return voice.start()
         return voice.status()
     if name == "/vosk":
