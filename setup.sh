@@ -38,6 +38,12 @@ export PATH="${HOME}/.local/bin:${PATH}"
 echo "==> Installing uv via pipx"
 pipx install uv
 
+echo "==> Ensuring pipx path is set"
+# Only source .bashrc if it exists to avoid potential issues
+if [ -f ~/.bashrc ]; then
+    source ~/.bashrc
+fi
+
 echo "==> Creating virtual environment with uv"
 uv venv
 

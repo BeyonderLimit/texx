@@ -163,3 +163,37 @@ def test_helper_reschedules_goal_after_fire(tmp_path):
     expected = datetime.fromisoformat(goal["due_at"])
     assert next_due > NOW
     assert (next_due - NOW) <= timedelta(hours=2, minutes=1)
+
+
+def test_helper_tick_with_memory_fires_events(tmp_path):
+    """Phase 7 maintenance runs before events fire, so a bad signature there
+    would silently kill every tick (main.py always passes memory=)."""
+    from core.events import EventBus
+    from services.memory import MemoryService
+    from services.owner import OwnerProfile
+
+    db = Database(tmp_path / "mem.db")
+    memory = MemoryService(db)
+    reminders = ReminderService(db)
+    ev = RecordingNotifier()
+    helper = Helper(
+        reminders, EventBus(),
+        event_notifier=ev,
+        goal_notifier=RecordingNotifier(),
+        clock=lambda: NOW,
+        memory=memory,
+        owner=OwnerProfile(path=tmp_path / "OWNER.md"),
+        llm=None,
+    )
+    # Discussion older than the 7-day cutoff must be compacted away; keep
+    # expires_at in the future so only compaction (not expiry) can remove it.
+    memory.add_discussion("stale chatter", source="session", role="user",
+                          expires_at=NOW + timedelta(days=30),
+                          now=NOW - timedelta(days=10))
+    reminders.add("meeting", due_at=NOW - timedelta(minutes=1), category="event")
+
+    summary = helper.tick()
+
+    assert summary["events"] == 1
+    assert len(ev.calls) == 1
+    assert memory.search("stale chatter", layers=["discussion"]) == []

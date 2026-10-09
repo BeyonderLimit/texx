@@ -52,8 +52,9 @@ class Helper:
         # Phase 7 background maintenance: compact short-term memory and refresh
         # the curated OWNER.md. Purely bookkeeping — never touches the request path.
         if self.memory is not None:
-            self.memory.compact_discussion(now)
-            self.memory.prune_daily(now)
+            # now= must be a keyword: the first positional param is older_than_days.
+            self.memory.compact_discussion(now=now)
+            self.memory.prune_daily(now=now)
             self.memory.summarize_yesterday_discussion(self.llm, now)
         if self.owner is not None and self.memory is not None:
             self.owner.maybe_regen(self.memory.persistent(), self.llm, now)
