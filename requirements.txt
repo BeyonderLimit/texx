@@ -1,19 +1,17 @@
+# Core runtime deps — Texx runs fully with just these two.
 rich>=13.0
 rapidfuzz>=3.0
-# Optional: only needed for local LLM conversation (Phase 5). Texx runs fully
-# without it; install to enable /llm with a GGUF model.
-llama-cpp-python>=0.3.0
-# Optional: voice (Phase 6). Texx runs fully without these. For voice you also
-# need model files (a Vosk model dir and a Piper .onnx voice) supplied by the user.
-vosk>=0.3.45
-# sounddevice is a Python binding to the system PortAudio library — you must
-# ALSO install the system package `libportaudio2`, or `import sounddevice`
-# raises "PortAudio library not found" (mic-probe.sh installs it automatically).
-sounddevice>=0.4.0
-piper-tts>=1.5.0
+
+# The optional layers are NOT listed here (Texx degrades gracefully without
+# them). Install them via the pyproject extras so version pins live in one
+# place (pyproject.toml [project.optional-dependencies]):
+#   local LLM:  uv pip install -e '.[llm]'   (llama-cpp-python; builds from source)
+#   voice:      uv pip install -e '.[voice]'  (vosk, sounddevice, piper-tts)
+#               or run ./voice-config.sh for the guided setup (also handles
+#               libportaudio2 + model downloads).
+
 # Bootstrapping tooling used by setup.sh / voice-config.sh. Installed as plain
 # packages so the scripts can find a working uv/pip even without OS packages
 # (they read `~/.local/bin` too). Harmless: both are just command-line tools.
 uv>=0.5
 pip>=24
-

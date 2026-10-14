@@ -489,6 +489,55 @@ Functions added: none in Python (messages only); new script `voice-config.sh`.
 
 ---
 
+## Build 21 — `setup.sh` optional layers are opt-in, not automatic
+
+Status: COMPLETE
+
+A draft made `setup.sh` unconditionally probe-install `llama-cpp-python`,
+`vosk`, `piper-tts` and `sounddevice` after the core install. That
+contradicted the design law — the LLM (Phase 5) and voice (Phase 6) layers are
+optional, lazy-loaded and degrade gracefully — and made bootstrap fragile:
+`llama-cpp-python` has no manylinux wheels on PyPI (compiles from source; needs
+a C++ toolchain + CMake), and under `set -e` a failed build aborted the whole
+script right after a perfectly working core venv already existed. The four
+import-probes were also dead code (`uv pip install -r requirements.txt` had
+just installed everything), and the `import sounddevice` probe misdiagnosed the
+known `libportaudio2` case (a correct pip install with a missing system library
+still fails to import — `voice-config.sh` handles that properly).
+
+- [x] `setup.sh` — opt-in flags `--with-llm` / `--with-voice` (positional
+  `TARGET_DIR` still accepted; unknown `--*` options exit 2). Installs go
+  through the pyproject extras (`.[llm]`, `.[voice]`) so version pins have one
+  source of truth. Optional installs are **never fatal**: failure prints a WARN
+  with the retry command and the core setup still completes. The voice branch
+  points at `./voice-config.sh` for `libportaudio2` + model downloads.
+  Default (no-flag) run prints how to add the layers later.
+- [x] `requirements.txt` — trimmed to the core (`rich`, `rapidfuzz`) plus the
+  `uv`/`pip` tooling deps; optional packages now live only in the pyproject
+  extras, with pointer comments.
+- [x] `voice-config.sh` — installs `-r requirements.txt` **and** the `voice`
+  extra (it previously got the voice libs from `requirements.txt`, which no
+  longer lists them); same for its `pip` fallback branch.
+- [x] Docs: README install table gains an "Install" column (per-layer commands);
+  AGENTS.md optional-deps pointer updated; the sanity check
+  (`from core import ...; from services import ...`) is unchanged — it passes in
+  a real checkout.
+
+Validated: `bash -n` on both scripts; sandboxed `./setup.sh .` run (core +
+sanity check pass, no optional installs attempted, hint printed); sandboxed
+`--with-voice` run installs the `voice` extra editably (site-packages points
+at the checkout) and completes; `--with-llm` extra verified via
+`--dry-run` resolution (avoids the multi-minute source build); a
+deliberately-broken `voice` extra confirms the WARN path leaves the script
+alive (sanity check still runs, exit 0). Full suite green (**224 passed**).
+
+Functions added: none in Python (setup tooling only).
+
+### Version
+- No version bump (setup-script tooling only; fully backward-compatible).
+
+---
+
 ## Roadmap
 
 | Phase | Scope | Status |

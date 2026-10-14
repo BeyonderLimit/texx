@@ -25,13 +25,14 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-`requirements.txt` lists everything, but the heavy pieces are **optional**:
+`requirements.txt` covers the core; the heavy pieces are **optional** and
+install through the pyproject extras:
 
-| Capability        | Packages (optional)                    |
-|-------------------|----------------------------------------|
-| Core (always on)  | `rich`, `rapidfuzz`                    |
-| Local LLM         | `llama-cpp-python` + a GGUF model file |
-| Voice (STT/TTS)   | `vosk` + `sounddevice` + `piper-tts`   |
+| Capability        | Packages (optional)                    | Install command     |
+|-------------------|----------------------------------------|---------------------|
+| Core (always on)  | `rich`, `rapidfuzz`                    | (above)             |
+| Local LLM         | `llama-cpp-python` + a GGUF model file | `pip install -e '.[llm]'` |
+| Voice (STT/TTS)   | `vosk` + `sounddevice` + `piper-tts`   | `pip install -e '.[voice]'` (or `./voice-config.sh`) |
 
 You can run Texx with none of the optional deps installed — it just won't
 offer LLM conversation or voice.

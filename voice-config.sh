@@ -122,10 +122,12 @@ step_venv() {
   PYTHON="${REPO_DIR}/.venv/bin/python"
 
   info "Installing requirements into .venv (first run can take a few minutes)"
+  # requirements.txt is core-only; the voice libs come from the pyproject
+  # 'voice' extra so their version pins live in one place.
   if command -v uv >/dev/null 2>&1; then
-    (cd "$REPO_DIR" && uv pip install --python "$PYTHON" -r requirements.txt) || return 1
+    (cd "$REPO_DIR" && uv pip install --python "$PYTHON" -r requirements.txt -e '.[voice]') || return 1
   else
-    "$PYTHON" -m pip install -r "${REPO_DIR}/requirements.txt" || return 1
+    (cd "$REPO_DIR" && "$PYTHON" -m pip install -r requirements.txt -e '.[voice]') || return 1
   fi
 
   if ! "$PYTHON" -c "import sounddevice, vosk" 2>/dev/null; then

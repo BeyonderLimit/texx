@@ -19,7 +19,7 @@ python -m pytest tests/test_memory.py::test_name  # single test
 
 **Use `python -m pytest` from the repo root.** There is no `conftest.py`, so a bare `pytest` binary can't import `core`/`services`/`intents` unless texx happens to be pip-installed editable (`pip install -e '.[dev]'`); `python -m` puts cwd on `sys.path` and always works.
 
-No `.venv` may exist yet (this box has no `pip`/`ensurepip` on the system interpreter — bootstrap with `setup.sh`, or `uv venv` + `uv pip install -r requirements.txt`, or get-pip.py). No linter, formatter, or CI is configured. Runtime deps: `rich`, `rapidfuzz`. Dev deps: `pytest`, `pytest-asyncio` (plugin installed but unused). Optional deps: `llama-cpp-python`, `vosk`, `sounddevice`, `piper-tts` (see `requirements.txt`; the pyproject extras are `.[llm]`, `.[voice]`, `.[dev]`).
+No `.venv` may exist yet (this box has no `pip`/`ensurepip` on the system interpreter — bootstrap with `setup.sh`, or `uv venv` + `uv pip install -r requirements.txt`, or get-pip.py). No linter, formatter, or CI is configured. Runtime deps: `rich`, `rapidfuzz`. Dev deps: `pytest`, `pytest-asyncio` (plugin installed but unused). Optional deps: `llama-cpp-python`, `vosk`, `sounddevice`, `piper-tts` (not in `requirements.txt` — install via the pyproject extras `.[llm]`, `.[voice]`, `.[dev]`).
 
 ## Request flow
 
