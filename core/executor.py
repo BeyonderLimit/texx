@@ -112,20 +112,34 @@ async def chat(command, ctx):
             "model with `/llm set /path/to/model.gguf`."
         )
     from llm.engine import ChatMessage
-    reply = llm.respond(user_text, history=ctx._chat_history)
+    # Inference runs in a worker thread. It is seconds of CPU-bound llama.cpp
+    # work, and calling it inline freezes the whole event loop — timers and
+    # reminders stop firing on time and the TUI stops repainting for the
+    # duration. Same treatment the network handlers get. LLMManager serializes
+    # concurrent calls on its own lock, so this is safe against the Helper tick.
+    reply = await asyncio.to_thread(llm.respond, user_text, history=ctx._chat_history)
     if not reply:
         return "The local model didn't return a response (it may have errored)."
     ctx._chat_history.append(ChatMessage("user", user_text))
     ctx._chat_history.append(ChatMessage("assistant", reply))
     ctx._chat_history = ctx._chat_history[-12:]
-    _maybe_store_memories(ctx, user_text, reply)
+    await _maybe_store_memories(ctx, user_text, reply)
     return reply
 
 
-def _maybe_store_memories(ctx, user_text: str, reply: str) -> None:
+async def _maybe_store_memories(ctx, user_text: str, reply: str) -> None:
+    """Extract durable facts from the exchange and persist them.
+
+    Only the extraction is threaded; the ``ctx.memory.add`` writes stay on the
+    event loop because ``Database`` opens a plain ``sqlite3.Connection``
+    (check_same_thread defaults to True) — touching it from a worker thread
+    raises ProgrammingError.
+    """
     if ctx.llm is None or not ctx.llm.is_available():
         return
-    candidates = ctx.llm.extract_memories(f"User: {user_text}\nTexx: {reply}")
+    candidates = await asyncio.to_thread(
+        ctx.llm.extract_memories, f"User: {user_text}\nTexx: {reply}"
+    )
     for cand in candidates[:5]:
         try:
             ctx.memory.add(
